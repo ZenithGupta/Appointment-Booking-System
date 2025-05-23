@@ -26,6 +26,7 @@ class Doctor(models.Model):
     )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
+    time_range = models.CharField(max_length=100)
     specialties = models.ManyToManyField(Specialty, related_name='doctors')
     languages = models.ManyToManyField(Language, related_name='doctors')
     bio = models.TextField()

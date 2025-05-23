@@ -13,17 +13,21 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = [AllowAny]
     
     def post(self, request, *args, **kwargs):
+        # Check if user is already logged in
+        if request.user.is_authenticated:
+            return Response({
+                "error": "Please logout before creating a new account",
+                "detail": "You are currently logged in. Please logout first to register a new account."
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Proceed with normal registration if user is not logged in
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        
-        # Generate JWT tokens for the new user
-        refresh = RefreshToken.for_user(user)
-        
+        token, created = Token.objects.get_or_create(user=user)
         return Response({
             "user": UserSerializer(user).data,
-            "refresh": str(refresh),
-            "access": str(refresh.access_token),
+            "token": token.key
         }, status=status.HTTP_201_CREATED)
 
 class CustomLoginView(TokenObtainPairView):
