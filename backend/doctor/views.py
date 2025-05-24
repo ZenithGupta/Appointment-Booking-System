@@ -8,22 +8,47 @@ from .serializers import (
     SpecialtySerializer, LanguageSerializer
 )
 
-class SpecialtyViewSet(viewsets.ReadOnlyModelViewSet):
+class SpecialtyViewSet(viewsets.ModelViewSet):  # Changed from ReadOnlyModelViewSet
     queryset = Specialty.objects.all()
     serializer_class = SpecialtySerializer
-    permission_classes = [AllowAny]
+    
+    def get_permissions(self):
+        """Read access for everyone, write access for admins only"""
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = [IsAdminUser]
+        return [permission() for permission in permission_classes]
 
-class LanguageViewSet(viewsets.ReadOnlyModelViewSet):
+class LanguageViewSet(viewsets.ModelViewSet):  # Changed from ReadOnlyModelViewSet
     queryset = Language.objects.all()
     serializer_class = LanguageSerializer
-    permission_classes = [AllowAny]
+    
+    def get_permissions(self):
+        """Read access for everyone, write access for admins only"""
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = [IsAdminUser]
+        return [permission() for permission in permission_classes]
 
-class DoctorViewSet(viewsets.ReadOnlyModelViewSet):
+class DoctorViewSet(viewsets.ModelViewSet):  # Changed from ReadOnlyModelViewSet
     queryset = Doctor.objects.all()
     serializer_class = DoctorSerializer
-    permission_classes = [AllowAny]
     filterset_fields = ['specialties', 'languages']
     search_fields = ['first_name', 'last_name', 'bio']
+    
+    def get_permissions(self):
+        """
+        Different permissions for different actions:
+        - Read operations (list, retrieve): Anyone can access
+        - Write operations (create, update, delete): Admin only
+        """
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAny]
+        else:  # create, update, partial_update, destroy
+            permission_classes = [IsAdminUser]
+        return [permission() for permission in permission_classes]
 
 class DoctorsBySpecialtyView(generics.ListAPIView):
     serializer_class = DoctorSerializer
