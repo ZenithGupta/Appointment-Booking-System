@@ -69,3 +69,29 @@
 - Appointment status tracking (scheduled, completed, canceled, no_show)
 
 This appears to be a comprehensive medical appointment booking system with proper authentication, user management, and appointment lifecycle management.
+
+New Admin-Only Endpoints Available:
+Doctors:
+
+POST /api/doctor/doctors/ - Create new doctor
+PUT /api/doctor/doctors/{id}/ - Update doctor
+PATCH /api/doctor/doctors/{id}/ - Partial update doctor
+DELETE /api/doctor/doctors/{id}/ - Delete doctor
+
+Specialties:
+
+POST /api/doctor/specialties/ - Create specialty
+PUT /api/doctor/specialties/{id}/ - Update specialty
+DELETE /api/doctor/specialties/{id}/ - Delete specialty
+
+Languages:
+
+POST /api/doctor/languages/ - Create language
+PUT /api/doctor/languages/{id}/ - Update language
+DELETE /api/doctor/languages/{id}/ - Delete language
+
+Schedules:
+
+POST /api/doctor/schedules/ - Create schedule
+PUT /api/doctor/schedules/{id}/ - Update schedule
+DELETE /api/doctor/schedules/{id}/ - Delete schedule
