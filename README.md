@@ -1,97 +1,36 @@
-# Appointment-Booking-System
+Updated API Endpoints
+After consolidation, all endpoints are now under /api/:
+Authentication
 
-## **Authentication Endpoints** (`/api/auth/`)
+POST /api/register/ - User registration
+POST /api/login/ - User login
+POST /api/logout/ - User logout
+GET/PUT /api/profile/ - User profile
+POST /api/change-password/ - Change password
 
-| Endpoint | Method | Use |
-|----------|--------|-----|
-| `/api/auth/register/` | POST | Register a new user account |
-| `/api/auth/login/` | POST | Login user and get authentication token |
-| `/api/auth/logout/` | POST | Logout user (delete auth token) |
-| `/api/auth/profile/` | GET, PUT, PATCH | Get/update user profile information |
-| `/api/auth/change-password/` | POST | Change user password |
+Doctors
 
-## **Doctor Endpoints** (`/api/doctor/`)
+GET /api/doctors/ - List doctors
+GET /api/doctors/{id}/ - Doctor detail
+GET /api/doctors/by-specialty/{specialty_id}/ - Doctors by specialty
+GET /api/doctors/{doctor_id}/available-slots/ - Available slots
+GET /api/specialties/ - List specialties
+GET /api/languages/ - List languages
+GET /api/schedules/ - Doctor schedules
 
-| Endpoint | Method | Use |
-|----------|--------|-----|
-| `/api/doctor/doctors/` | GET | List all doctors |
-| `/api/doctor/doctors/{id}/` | GET | Get specific doctor details |
-| `/api/doctor/schedules/` | GET, POST | List schedules / Create new schedule (admin only) |
-| `/api/doctor/schedules/{id}/` | GET, PUT, PATCH, DELETE | Get/update/delete specific schedule (admin only) |
-| `/api/doctor/specialties/` | GET | List all medical specialties |
-| `/api/doctor/specialties/{id}/` | GET | Get specific specialty details |
-| `/api/doctor/languages/` | GET | List all languages |
-| `/api/doctor/languages/{id}/` | GET | Get specific language details |
-| `/api/doctor/by-specialty/{specialty_id}/` | GET | Get doctors filtered by specialty |
-| `/api/doctor/doctors/{doctor_id}/available-slots/` | GET | Get available appointment slots for a doctor |
+Patients
 
-## **Patient Endpoints** (`/api/patient/`)
+GET/POST /api/patient/profile/ - Patient profile management
+GET/POST /api/patient/medical-history/ - Medical history management
 
-| Endpoint | Method | Use |
-|----------|--------|-----|
-| `/api/patient/profile/` | GET, POST, PUT, PATCH, DELETE | Manage patient profile (user's own) |
-| `/api/patient/profile/{id}/` | GET, PUT, PATCH, DELETE | Get/update specific patient profile |
-| `/api/patient/medical-history/` | GET, POST | List/create medical history records |
-| `/api/patient/medical-history/{id}/` | GET, PUT, PATCH, DELETE | Get/update/delete specific medical history |
+Appointments
 
-## **Appointment Endpoints** (`/api/appointment/`)
+GET /api/appointment/my-appointments/ - User's appointments
+POST /api/appointment/book/{doctor_id}/ - Book appointment
+POST /api/appointment/cancel/{appointment_id}/ - Cancel appointment
 
-| Endpoint | Method | Use |
-|----------|--------|-----|
-| `/api/appointment/my-appointments/` | GET | List user's appointments |
-| `/api/appointment/my-appointments/{id}/` | GET | Get specific appointment details |
-| `/api/appointment/book/{doctor_id}/` | POST | Book appointment with a doctor |
-| `/api/appointment/cancel/{appointment_id}/` | POST | Cancel an existing appointment |
+Notes
 
-## **Admin Endpoints**
-
-| Endpoint | Method | Use |
-|----------|--------|-----|
-| `/admin/` | GET, POST | Django admin interface |
-| `/api-auth/` | GET, POST | DRF browsable API authentication |
-
-## **Key Features & Permissions:**
-
-**Authentication Required:**
-- Most endpoints require authentication except doctor listings, specialties, languages, and available slots
-
-**User-Specific Data:**
-- Patients can only see their own profile, medical history, and appointments
-- Doctors and schedules are publicly viewable for browsing
-
-**Admin-Only Operations:**
-- Creating/updating/deleting doctor schedules
-- Full CRUD operations through Django admin
-
-**Special Logic:**
-- Booking appointments automatically reduces available slots
-- Canceling appointments restores available slots
-- Appointment status tracking (scheduled, completed, canceled, no_show)
-
-This appears to be a comprehensive medical appointment booking system with proper authentication, user management, and appointment lifecycle management.
-
-New Admin-Only Endpoints Available:
-Doctors:
-
-POST /api/doctor/doctors/ - Create new doctor
-PUT /api/doctor/doctors/{id}/ - Update doctor
-PATCH /api/doctor/doctors/{id}/ - Partial update doctor
-DELETE /api/doctor/doctors/{id}/ - Delete doctor
-
-Specialties:
-
-POST /api/doctor/specialties/ - Create specialty
-PUT /api/doctor/specialties/{id}/ - Update specialty
-DELETE /api/doctor/specialties/{id}/ - Delete specialty
-
-Languages:
-
-POST /api/doctor/languages/ - Create language
-PUT /api/doctor/languages/{id}/ - Update language
-DELETE /api/doctor/languages/{id}/ - Delete language
-
-Schedules:
-
-POST /api/doctor/schedules/ - Create schedule
-PUT /api/doctor/schedules/{id}/ - Update schedule
-DELETE /api/doctor/schedules/{id}/ - Delete schedule
+All functionality remains the same, just consolidated into one app
+Admin interface will show all models under the Authentication app
+URL structure has been simplified
