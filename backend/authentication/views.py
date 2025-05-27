@@ -2,20 +2,20 @@ from rest_framework import generics, status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
-from rest_framework.authtoken.models import Token
-from rest_framework.authtoken.views import ObtainAuthToken
+from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
 from datetime import datetime, timedelta
 
 from .models import (
-    Doctor, DoctorSchedule, Specialty, Language,
+    Doctor, DoctorSchedule, Specialty, Language, TimeSlot,
     Patient, MedicalHistory, Appointment
 )
 from .serializers import (
     UserSerializer, DoctorSerializer, DoctorScheduleSerializer,
     SpecialtySerializer, LanguageSerializer, PatientSerializer,
-    MedicalHistorySerializer, AppointmentSerializer
+    MedicalHistorySerializer, AppointmentSerializer, BookAppointmentSerializer
 )
 
 # Authentication views
@@ -28,29 +28,58 @@ class RegisterView(generics.CreateAPIView):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
-        token, created = Token.objects.get_or_create(user=user)
+        
+        # Create JWT tokens
+        refresh = RefreshToken.for_user(user)
+        access_token = refresh.access_token
+        
         return Response({
             "user": UserSerializer(user).data,
-            "token": token.key
-        })
+            "refresh": str(refresh),
+            "access": str(access_token)
+        }, status=status.HTTP_201_CREATED)
 
-class CustomLoginView(ObtainAuthToken):
-    def post(self, request, *args, **kwargs):
-        response = super().post(request, *args, **kwargs)
-        token = Token.objects.get(key=response.data['token'])
-        user = token.user
-        return Response({
-            'token': token.key,
-            'user_id': user.id,
-            'email': user.email
-        })
+class LoginView(APIView):
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        username = request.data.get('username')
+        password = request.data.get('password')
+        
+        if not username or not password:
+            return Response({
+                'error': 'Please provide both username and password'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        user = authenticate(username=username, password=password)
+        
+        if user:
+            refresh = RefreshToken.for_user(user)
+            access_token = refresh.access_token
+            
+            return Response({
+                'refresh': str(refresh),
+                'access': str(access_token),
+                'user_id': user.id,
+                'email': user.email,
+                'username': user.username
+            })
+        else:
+            return Response({
+                'error': 'Invalid credentials'
+            }, status=status.HTTP_401_UNAUTHORIZED)
 
 class LogoutView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request):
-        request.user.auth_token.delete()
-        return Response(status=status.HTTP_200_OK)
+        try:
+            refresh_token = request.data["refresh"]
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+            return Response({"message": "Successfully logged out"}, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"error": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
 
 class UserProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
@@ -73,23 +102,41 @@ class ChangePasswordView(APIView):
         user.save()
         return Response({"success": "Password updated successfully"}, status=status.HTTP_200_OK)
 
-# Doctor views
-class SpecialtyViewSet(viewsets.ReadOnlyModelViewSet):
+# Doctor related views
+class SpecialtyViewSet(viewsets.ModelViewSet):
     queryset = Specialty.objects.all()
     serializer_class = SpecialtySerializer
-    permission_classes = [AllowAny]
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAny]  # Anyone can view specialties
+        else:
+            permission_classes = [IsAuthenticated]  # Must be logged in to create/edit/delete
+        return [permission() for permission in permission_classes]
 
-class LanguageViewSet(viewsets.ReadOnlyModelViewSet):
+class LanguageViewSet(viewsets.ModelViewSet):
     queryset = Language.objects.all()
     serializer_class = LanguageSerializer
-    permission_classes = [AllowAny]
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAny]  # Anyone can view languages
+        else:
+            permission_classes = [IsAuthenticated]  # Must be logged in to create/edit/delete
+        return [permission() for permission in permission_classes]
 
-class DoctorViewSet(viewsets.ReadOnlyModelViewSet):
+class DoctorViewSet(viewsets.ModelViewSet):
     queryset = Doctor.objects.all()
     serializer_class = DoctorSerializer
-    permission_classes = [AllowAny]
     filterset_fields = ['specialties', 'languages']
     search_fields = ['first_name', 'last_name', 'bio']
+    
+    def get_permissions(self):
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAny]  # Anyone can view doctors
+        else:
+            permission_classes = [IsAuthenticated]  # Must be logged in to create/edit/delete
+        return [permission() for permission in permission_classes]
 
 class DoctorsBySpecialtyView(generics.ListAPIView):
     serializer_class = DoctorSerializer
@@ -105,9 +152,9 @@ class DoctorScheduleViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
-            permission_classes = [AllowAny]
+            permission_classes = [AllowAny]  # Anyone can view schedules
         else:
-            permission_classes = [IsAdminUser]
+            permission_classes = [IsAuthenticated]  # Must be logged in to create/edit/delete
         return [permission() for permission in permission_classes]
 
 class AvailableSlotsView(APIView):
@@ -117,7 +164,11 @@ class AvailableSlotsView(APIView):
         # Get today's date
         today = datetime.now().date()
         # Get end date (30 days from now by default)
-        doctor = Doctor.objects.get(id=doctor_id)
+        try:
+            doctor = Doctor.objects.get(id=doctor_id)
+        except Doctor.DoesNotExist:
+            return Response({'error': 'Doctor not found'}, status=status.HTTP_404_NOT_FOUND)
+        
         end_date = today + timedelta(days=30)
         
         # Get available schedules
@@ -131,6 +182,27 @@ class AvailableSlotsView(APIView):
         
         serializer = DoctorScheduleSerializer(available_slots, many=True)
         return Response(serializer.data)
+
+class AvailableTimeSlotsView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request, doctor_id, schedule_id):
+        try:
+            schedule = DoctorSchedule.objects.get(
+                id=schedule_id, 
+                doctor_id=doctor_id, 
+                is_active=True
+            )
+            serializer = DoctorScheduleSerializer(schedule)
+            return Response({
+                'schedule': serializer.data,
+                'available_slots': serializer.data['available_time_slots']
+            })
+        except DoctorSchedule.DoesNotExist:
+            return Response(
+                {'error': 'Schedule not found'}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
 
 # Patient views
 class PatientViewSet(viewsets.ModelViewSet):
@@ -157,24 +229,52 @@ class MedicalHistoryViewSet(viewsets.ModelViewSet):
         serializer.save(patient=patient)
 
 # Appointment views
-class AppointmentViewSet(viewsets.ReadOnlyModelViewSet):
+class AppointmentViewSet(viewsets.ModelViewSet):
     serializer_class = AppointmentSerializer
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
         # Users can only see their own appointments
-        patient = get_object_or_404(Patient, user=self.request.user)
-        return Appointment.objects.filter(patient=patient)
+        try:
+            patient = Patient.objects.get(user=self.request.user)
+            return Appointment.objects.filter(patient=patient)
+        except Patient.DoesNotExist:
+            return Appointment.objects.none()
+    
+    def perform_create(self, serializer):
+        # Get or create patient for this user
+        patient, created = Patient.objects.get_or_create(
+            user=self.request.user,
+            defaults={
+                'first_name': self.request.user.first_name or 'Unknown',
+                'last_name': self.request.user.last_name or 'User',
+                'date_of_birth': '2000-01-01',  # Default date
+                'phone_number': '',
+                'address': ''
+            }
+        )
+        serializer.save(patient=patient)
 
 class BookAppointmentView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request, doctor_id):
-        # Get the schedule
-        schedule_id = request.data.get('schedule_id')
-        schedule = get_object_or_404(DoctorSchedule, id=schedule_id, doctor_id=doctor_id)
+        serializer = BookAppointmentSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check if slots are available
+        data = serializer.validated_data
+        schedule_id = data['schedule_id']
+        
+        # Get the schedule
+        try:
+            schedule = DoctorSchedule.objects.get(id=schedule_id, doctor_id=doctor_id)
+        except DoctorSchedule.DoesNotExist:
+            return Response({
+                'message': 'Schedule not found'
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        # Check if there are available slots
         if schedule.available_slots <= 0:
             return Response({
                 'message': 'No available slots for this schedule'
@@ -184,21 +284,49 @@ class BookAppointmentView(APIView):
         patient, created = Patient.objects.get_or_create(
             user=request.user,
             defaults={
-                'first_name': request.user.first_name,
-                'last_name': request.user.last_name,
-                # You'll need to collect these fields separately
-                'date_of_birth': request.data.get('date_of_birth'),
-                'phone_number': request.data.get('phone_number'),
-                'address': request.data.get('address', '')
+                'first_name': request.user.first_name or 'Unknown',
+                'last_name': request.user.last_name or 'User',
+                'date_of_birth': data.get('date_of_birth'),
+                'phone_number': data.get('phone_number', ''),
+                'address': data.get('address', '')
             }
         )
+        
+        # Handle slot-based vs range-based appointments
+        time_slot = None
+        if schedule.time_range == 'slot-based':
+            # For slot-based appointments
+            time_slot_id = data.get('time_slot_id')
+            try:
+                time_slot = TimeSlot.objects.get(
+                    id=time_slot_id,
+                    schedule=schedule,
+                    is_booked=False
+                )
+                time_slot.is_booked = True
+                time_slot.save()
+                
+                appointment_start_time = time_slot.start_time
+                appointment_end_time = time_slot.end_time
+                
+            except TimeSlot.DoesNotExist:
+                return Response({
+                    'message': 'Time slot not available'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            # For range-based appointments
+            appointment_start_time = data.get('start_time')
+            appointment_end_time = data.get('end_time')
         
         # Create appointment
         appointment = Appointment.objects.create(
             patient=patient,
             doctor_id=doctor_id,
             schedule=schedule,
-            notes=request.data.get('notes', '')
+            time_slot=time_slot,
+            appointment_start_time=appointment_start_time,
+            appointment_end_time=appointment_end_time,
+            notes=data.get('notes', '')
         )
         
         # Reduce available slots
@@ -215,11 +343,15 @@ class CancelAppointmentView(APIView):
     
     def post(self, request, appointment_id):
         # Get the appointment
-        appointment = get_object_or_404(
-            Appointment, 
-            id=appointment_id,
-            patient__user=request.user
-        )
+        try:
+            appointment = Appointment.objects.get(
+                id=appointment_id,
+                patient__user=request.user
+            )
+        except Appointment.DoesNotExist:
+            return Response({
+                'message': 'Appointment not found'
+            }, status=status.HTTP_404_NOT_FOUND)
         
         # Check if appointment can be canceled
         if appointment.status != 'scheduled':
@@ -230,6 +362,11 @@ class CancelAppointmentView(APIView):
         # Update status
         appointment.status = 'canceled'
         appointment.save()
+        
+        # Mark time slot as available if it was slot-based
+        if appointment.time_slot:
+            appointment.time_slot.is_booked = False
+            appointment.time_slot.save()
         
         # Increase available slots
         schedule = appointment.schedule

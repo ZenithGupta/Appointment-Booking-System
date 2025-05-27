@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from .models import (
-    Doctor, DoctorSchedule, Specialty, Language,
+    Doctor, DoctorSchedule, Specialty, Language, TimeSlot,
     Patient, MedicalHistory, Appointment
 )
 
@@ -35,8 +35,21 @@ class DoctorSerializer(serializers.ModelSerializer):
         model = Doctor
         fields = '__all__'
 
+class TimeSlotSerializer(serializers.ModelSerializer):
+    formatted_time = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = TimeSlot
+        fields = '__all__'
+    
+    def get_formatted_time(self, obj):
+        return f"{obj.start_time.strftime('%I:%M %p')} - {obj.end_time.strftime('%I:%M %p')}"
+
 class DoctorScheduleSerializer(serializers.ModelSerializer):
     doctor_name = serializers.SerializerMethodField()
+    time_range_display = serializers.CharField(source='get_time_range_display', read_only=True)
+    slot_duration_display = serializers.CharField(source='get_slot_duration_display', read_only=True)
+    available_time_slots = serializers.SerializerMethodField()
     
     class Meta:
         model = DoctorSchedule
@@ -44,6 +57,18 @@ class DoctorScheduleSerializer(serializers.ModelSerializer):
     
     def get_doctor_name(self, obj):
         return str(obj.doctor)
+    
+    def get_available_time_slots(self, obj):
+        if obj.time_range == 'slot-based':
+            available_slots = obj.time_slots.filter(is_booked=False)
+            return TimeSlotSerializer(available_slots, many=True).data
+        else:
+            return {
+                'type': 'range-based',
+                'start_time': obj.start_time.strftime('%H:%M'),
+                'end_time': obj.end_time.strftime('%H:%M'),
+                'message': 'Flexible appointment timing within the given range'
+            }
 
 # Patient related serializers
 class PatientSerializer(serializers.ModelSerializer):
@@ -60,6 +85,8 @@ class MedicalHistorySerializer(serializers.ModelSerializer):
 class AppointmentSerializer(serializers.ModelSerializer):
     patient_name = serializers.SerializerMethodField()
     doctor_name = serializers.SerializerMethodField()
+    appointment_time_formatted = serializers.SerializerMethodField()
+    schedule_type = serializers.CharField(source='schedule.time_range', read_only=True)
     
     class Meta:
         model = Appointment
@@ -70,3 +97,33 @@ class AppointmentSerializer(serializers.ModelSerializer):
     
     def get_doctor_name(self, obj):
         return str(obj.doctor)
+    
+    def get_appointment_time_formatted(self, obj):
+        return f"{obj.appointment_start_time.strftime('%I:%M %p')} - {obj.appointment_end_time.strftime('%I:%M %p')}"
+
+class BookAppointmentSerializer(serializers.Serializer):
+    schedule_id = serializers.IntegerField()
+    time_slot_id = serializers.IntegerField(required=False, help_text="Required for slot-based appointments")
+    start_time = serializers.TimeField(required=False, help_text="Required for range-based appointments")
+    end_time = serializers.TimeField(required=False, help_text="Required for range-based appointments")
+    notes = serializers.CharField(required=False, allow_blank=True)
+    date_of_birth = serializers.DateField(required=False)
+    phone_number = serializers.CharField(required=False)
+    address = serializers.CharField(required=False, allow_blank=True)
+    
+    def validate(self, data):
+        schedule_id = data.get('schedule_id')
+        try:
+            schedule = DoctorSchedule.objects.get(id=schedule_id)
+            
+            if schedule.time_range == 'slot-based':
+                if not data.get('time_slot_id'):
+                    raise serializers.ValidationError("time_slot_id is required for slot-based appointments")
+            else:  # range-based
+                if not data.get('start_time') or not data.get('end_time'):
+                    raise serializers.ValidationError("start_time and end_time are required for range-based appointments")
+                    
+        except DoctorSchedule.DoesNotExist:
+            raise serializers.ValidationError("Schedule not found")
+        
+        return data

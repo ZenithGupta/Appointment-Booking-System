@@ -1,5 +1,6 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from rest_framework_simplejwt.views import TokenRefreshView
 from . import views
 
 # Create router and register viewsets
@@ -19,16 +20,20 @@ router.register(r'patient/medical-history', views.MedicalHistoryViewSet, basenam
 router.register(r'appointment/my-appointments', views.AppointmentViewSet, basename='my-appointments')
 
 urlpatterns = [
-    # Authentication URLs
+    # Authentication URLs (JWT)
     path('register/', views.RegisterView.as_view(), name='register'),
-    path('login/', views.CustomLoginView.as_view(), name='login'),
+    path('login/', views.LoginView.as_view(), name='login'),
     path('logout/', views.LogoutView.as_view(), name='logout'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('profile/', views.UserProfileView.as_view(), name='profile'),
     path('change-password/', views.ChangePasswordView.as_view(), name='change-password'),
     
     # Doctor specific URLs
     path('doctors/by-specialty/<int:specialty_id>/', views.DoctorsBySpecialtyView.as_view(), name='doctors-by-specialty'),
     path('doctors/<int:doctor_id>/available-slots/', views.AvailableSlotsView.as_view(), name='available-slots'),
+    path('doctors/<int:doctor_id>/schedules/<int:schedule_id>/available-slots/', 
+         views.AvailableTimeSlotsView.as_view(), 
+         name='available-time-slots'),
     
     # Appointment specific URLs
     path('appointment/book/<int:doctor_id>/', views.BookAppointmentView.as_view(), name='book-appointment'),
