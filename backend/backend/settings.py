@@ -42,9 +42,9 @@ INSTALLED_APPS = [
     'authentication',
     'corsheaders',
     # 'rest_framework.authtoken', previous token system
-    'appointment',
-    'doctor',
-    'patient',
+    # 'appointment', previous apps removed
+    # 'doctor',
+    # 'patient',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist'
 ]

@@ -1,82 +1,129 @@
 from rest_framework import serializers
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth.models import User
-from django.contrib.auth.password_validation import validate_password
-from django.contrib.auth import authenticate
+from .models import (
+    Doctor, DoctorSchedule, Specialty, Language, TimeSlot,
+    Patient, MedicalHistory, Appointment
+)
 
+# User serializers
 class UserSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True, validators=[validate_password])
-    password_confirm = serializers.CharField(write_only=True)
-    
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'password', 'password_confirm']
-        extra_kwargs = {
-            'password': {'write_only': True},
-            'email': {'required': True}
-        }
-    
-    def validate(self, attrs):
-        if attrs.get('password') != attrs.get('password_confirm'):
-            raise serializers.ValidationError("Passwords don't match")
-        return attrs
+        fields = ['id', 'username', 'email', 'first_name', 'last_name']
+        extra_kwargs = {'password': {'write_only': True}}
     
     def create(self, validated_data):
-        # Remove password_confirm as it's not needed for user creation
-        validated_data.pop('password_confirm', None)
         user = User.objects.create_user(**validated_data)
         return user
-    
-    def update(self, instance, validated_data):
-        # Remove password from validated_data if present
-        # Password should be updated through ChangePasswordView
-        validated_data.pop('password', None)
-        validated_data.pop('password_confirm', None)
-        
-        for attr, value in validated_data.items():
-            setattr(instance, attr, value)
-        instance.save()
-        return instance
 
-class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.fields['username'] = serializers.CharField()
-        self.fields['password'] = serializers.CharField(style={'input_type': 'password'})
+# Doctor related serializers
+class SpecialtySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Specialty
+        fields = '__all__'
+
+class LanguageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Language
+        fields = '__all__'
+
+class DoctorSerializer(serializers.ModelSerializer):
+    specialties = SpecialtySerializer(many=True, read_only=True)
+    languages = LanguageSerializer(many=True, read_only=True)
     
-    @classmethod
-    def get_token(cls, user):
-        token = super().get_token(user)
-        
-        # Add custom claims
-        token['username'] = user.username
-        token['email'] = user.email
-        token['first_name'] = user.first_name
-        token['last_name'] = user.last_name
-        
-        return token
+    class Meta:
+        model = Doctor
+        fields = '__all__'
+
+class TimeSlotSerializer(serializers.ModelSerializer):
+    formatted_time = serializers.SerializerMethodField()
     
-    def validate(self, attrs):
-        # Get username and password from the validated data
-        username = attrs.get('username')
-        password = attrs.get('password')
+    class Meta:
+        model = TimeSlot
+        fields = '__all__'
+    
+    def get_formatted_time(self, obj):
+        return f"{obj.start_time.strftime('%I:%M %p')} - {obj.end_time.strftime('%I:%M %p')}"
+
+class DoctorScheduleSerializer(serializers.ModelSerializer):
+    doctor_name = serializers.SerializerMethodField()
+    time_range_display = serializers.CharField(source='get_time_range_display', read_only=True)
+    slot_duration_display = serializers.CharField(source='get_slot_duration_display', read_only=True)
+    available_time_slots = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = DoctorSchedule
+        fields = '__all__'
+    
+    def get_doctor_name(self, obj):
+        return str(obj.doctor)
+    
+    def get_available_time_slots(self, obj):
+        if obj.time_range == 'slot-based':
+            available_slots = obj.time_slots.filter(is_booked=False)
+            return TimeSlotSerializer(available_slots, many=True).data
+        else:
+            return {
+                'type': 'range-based',
+                'start_time': obj.start_time.strftime('%H:%M'),
+                'end_time': obj.end_time.strftime('%H:%M'),
+                'message': 'Flexible appointment timing within the given range'
+            }
+
+# Patient related serializers
+class PatientSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Patient
+        fields = '__all__'
+
+class MedicalHistorySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = MedicalHistory
+        fields = '__all__'
+
+# Appointment related serializers
+class AppointmentSerializer(serializers.ModelSerializer):
+    patient_name = serializers.SerializerMethodField()
+    doctor_name = serializers.SerializerMethodField()
+    appointment_time_formatted = serializers.SerializerMethodField()
+    schedule_type = serializers.CharField(source='schedule.time_range', read_only=True)
+    
+    class Meta:
+        model = Appointment
+        fields = '__all__'
+    
+    def get_patient_name(self, obj):
+        return str(obj.patient)
+    
+    def get_doctor_name(self, obj):
+        return str(obj.doctor)
+    
+    def get_appointment_time_formatted(self, obj):
+        return f"{obj.appointment_start_time.strftime('%I:%M %p')} - {obj.appointment_end_time.strftime('%I:%M %p')}"
+
+class BookAppointmentSerializer(serializers.Serializer):
+    schedule_id = serializers.IntegerField()
+    time_slot_id = serializers.IntegerField(required=False, help_text="Required for slot-based appointments")
+    start_time = serializers.TimeField(required=False, help_text="Required for range-based appointments")
+    end_time = serializers.TimeField(required=False, help_text="Required for range-based appointments")
+    notes = serializers.CharField(required=False, allow_blank=True)
+    date_of_birth = serializers.DateField(required=False)
+    phone_number = serializers.CharField(required=False)
+    address = serializers.CharField(required=False, allow_blank=True)
+    
+    def validate(self, data):
+        schedule_id = data.get('schedule_id')
+        try:
+            schedule = DoctorSchedule.objects.get(id=schedule_id)
+            
+            if schedule.time_range == 'slot-based':
+                if not data.get('time_slot_id'):
+                    raise serializers.ValidationError("time_slot_id is required for slot-based appointments")
+            else:  # range-based
+                if not data.get('start_time') or not data.get('end_time'):
+                    raise serializers.ValidationError("start_time and end_time are required for range-based appointments")
+                    
+        except DoctorSchedule.DoesNotExist:
+            raise serializers.ValidationError("Schedule not found")
         
-        # Authenticate the user
-        user = authenticate(username=username, password=password)
-        
-        if user is None:
-            raise serializers.ValidationError('Invalid username or password')
-        
-        if not user.is_active:
-            raise serializers.ValidationError('User account is disabled')
-        
-        # Set the user for the token generation
-        self.user = user
-        
-        # Generate tokens
-        refresh = self.get_token(user)
-        
-        return {
-            'refresh': str(refresh),
-            'access': str(refresh.access_token),
-        }
+        return data

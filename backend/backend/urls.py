@@ -6,11 +6,8 @@ from django.conf.urls.static import static
 urlpatterns = [
     path('admin/', admin.site.urls),
     
-    # API endpoints
-    path('api/auth/', include('authentication.urls')),
-    path('api/doctor/', include('doctor.urls')),
-    path('api/patient/', include('patient.urls')),
-    path('api/appointment/', include('appointment.urls')),
+    # All API endpoints now consolidated under authentication
+    path('api/', include('authentication.urls')),
     
     # DRF authentication (for browsable API)
     path('api-auth/', include('rest_framework.urls')),
