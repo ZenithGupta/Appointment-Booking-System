@@ -45,7 +45,6 @@ class Doctor(models.Model):
     def __str__(self):
         return f"Dr. {self.first_name} {self.last_name}"
 
-
 class DoctorSchedule(models.Model):
     TIME_RANGE_CHOICES = [
         ('slot-based', 'Slot Based - Specific time slots'),

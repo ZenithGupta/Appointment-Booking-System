@@ -1,5 +1,3 @@
-# Updated UserSerializer in backend/authentication/serializers.py
-
 from rest_framework import serializers
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
@@ -57,7 +55,7 @@ class LoginSerializer(serializers.Serializer):
         
         return data
 
-# Keep all your existing serializers below...
+# Doctor related serializers
 class SpecialtySerializer(serializers.ModelSerializer):
     class Meta:
         model = Specialty
@@ -111,6 +109,7 @@ class DoctorScheduleSerializer(serializers.ModelSerializer):
                 'message': 'Flexible appointment timing within the given range'
             }
 
+# Patient related serializers
 class PatientSerializer(serializers.ModelSerializer):
     class Meta:
         model = Patient
@@ -121,6 +120,7 @@ class MedicalHistorySerializer(serializers.ModelSerializer):
         model = MedicalHistory
         fields = '__all__'
 
+# Appointment related serializers
 class AppointmentSerializer(serializers.ModelSerializer):
     patient_name = serializers.SerializerMethodField()
     doctor_name = serializers.SerializerMethodField()
