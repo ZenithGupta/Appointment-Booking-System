@@ -13,7 +13,7 @@ from .models import (
     Patient, MedicalHistory, Appointment
 )
 from .serializers import (
-    UserSerializer, DoctorSerializer, DoctorScheduleSerializer,
+    UserSerializer, DoctorSerializer, DoctorScheduleSerializer, LoginSerializer,
     SpecialtySerializer, LanguageSerializer, PatientSerializer,
     MedicalHistorySerializer, AppointmentSerializer, BookAppointmentSerializer
 )
@@ -43,28 +43,49 @@ class LoginView(APIView):
     permission_classes = [AllowAny]
     
     def post(self, request):
-        username = request.data.get('username')
+        email = request.data.get('email')
         password = request.data.get('password')
         
-        if not username or not password:
+        print(f"🔍 Login attempt: {email} / {'*' * len(password) if password else 'None'}")
+        
+        if not email or not password:
             return Response({
-                'error': 'Please provide both username and password'
+                'error': 'Email and password are required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        user = authenticate(username=username, password=password)
-        
-        if user:
-            refresh = RefreshToken.for_user(user)
-            access_token = refresh.access_token
+        try:
+            # Find user by email
+            user = User.objects.get(email=email)
+            print(f"🔍 User found: {user.username}")
             
-            return Response({
-                'refresh': str(refresh),
-                'access': str(access_token),
-                'user_id': user.id,
-                'email': user.email,
-                'username': user.username
-            })
-        else:
+            # Authenticate with username and password
+            authenticated_user = authenticate(username=user.username, password=password)
+            print(f"🔍 Authentication result: {authenticated_user}")
+            
+            if authenticated_user and authenticated_user.is_active:
+                # Create JWT tokens
+                refresh = RefreshToken.for_user(authenticated_user)
+                access_token = refresh.access_token
+                
+                print("✅ Login successful!")
+                
+                return Response({
+                    'refresh': str(refresh),
+                    'access': str(access_token),
+                    'user_id': authenticated_user.id,
+                    'email': authenticated_user.email,
+                    'username': authenticated_user.username,
+                    'first_name': authenticated_user.first_name,
+                    'last_name': authenticated_user.last_name
+                })
+            else:
+                print("❌ Authentication failed")
+                return Response({
+                    'error': 'Invalid credentials'
+                }, status=status.HTTP_401_UNAUTHORIZED)
+                
+        except User.DoesNotExist:
+            print("❌ User not found")
             return Response({
                 'error': 'Invalid credentials'
             }, status=status.HTTP_401_UNAUTHORIZED)

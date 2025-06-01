@@ -1,0 +1,630 @@
+/* Custom CSS for Bootstrap Version */
+
+/* Custom color variables */
+:root {
+  --teal-color: #66CDAA;
+  --lime-color: #bcfd49;
+  --teal-hover: #5bb89a;
+  --lime-hover: #a8e63a;
+}
+
+/* Remove any default margins/padding and prevent horizontal scroll */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body {
+  overflow-x: hidden !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  max-width: 100vw !important;
+}
+
+/* Complete container and grid reset */
+.container-fluid {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
+}
+
+/* Remove ALL row margins and ensure no overflow */
+.row {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Remove column gutters completely */
+.col, .col-1, .col-2, .col-3, .col-4, .col-5, .col-6, 
+.col-7, .col-8, .col-9, .col-10, .col-11, .col-12,
+.col-auto, .col-sm, .col-md, .col-lg, .col-xl, .col-xxl,
+.col-sm-1, .col-sm-2, .col-sm-3, .col-sm-4, .col-sm-5, .col-sm-6,
+.col-sm-7, .col-sm-8, .col-sm-9, .col-sm-10, .col-sm-11, .col-sm-12,
+.col-md-1, .col-md-2, .col-md-3, .col-md-4, .col-md-5, .col-md-6,
+.col-md-7, .col-md-8, .col-md-9, .col-md-10, .col-md-11, .col-md-12,
+.col-lg-1, .col-lg-2, .col-lg-3, .col-lg-4, .col-lg-5, .col-lg-6,
+.col-lg-7, .col-lg-8, .col-lg-9, .col-lg-10, .col-lg-11, .col-lg-12 {
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+/* Add proper padding to sections instead */
+header .container-fluid,
+.hero-section .container-fluid,
+section .container-fluid,
+footer .container-fluid {
+  padding-left: 15px !important;
+  padding-right: 15px !important;
+}
+
+/* Force full width on main wrapper */
+.min-vh-100 {
+  width: 100% !important;
+  max-width: 100% !important;
+  overflow-x: hidden !important;
+}
+
+@media (max-width: 576px) {
+  header .container-fluid,
+  .hero-section .container-fluid,
+  section .container-fluid,
+  footer .container-fluid {
+    padding-left: 10px !important;
+    padding-right: 10px !important;
+  }
+  
+  .col, .col-1, .col-2, .col-3, .col-4, .col-5, .col-6, 
+  .col-7, .col-8, .col-9, .col-10, .col-11, .col-12,
+  .col-auto, .col-sm, .col-md, .col-lg, .col-xl, .col-xxl,
+  .col-sm-1, .col-sm-2, .col-sm-3, .col-sm-4, .col-sm-5, .col-sm-6,
+  .col-sm-7, .col-sm-8, .col-sm-9, .col-sm-10, .col-sm-11, .col-sm-12,
+  .col-md-1, .col-md-2, .col-md-3, .col-md-4, .col-md-5, .col-md-6,
+  .col-md-7, .col-md-8, .col-md-9, .col-md-10, .col-md-11, .col-md-12,
+  .col-lg-1, .col-lg-2, .col-lg-3, .col-lg-4, .col-lg-5, .col-lg-6,
+  .col-lg-7, .col-lg-8, .col-lg-9, .col-lg-10, .col-lg-11, .col-lg-12 {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+}
+
+/* Custom doctors grid layout */
+.doctors-container {
+  width: 100%;
+  max-width: 100%;
+  padding-left: 15px;
+  padding-right: 15px;
+  margin: 0 auto;
+}
+
+.doctors-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  width: 100%;
+  max-width: 100%;
+}
+
+.doctor-card-wrapper {
+  width: 100%;
+  max-width: 100%;
+}
+
+.no-doctors-message {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 3rem 0;
+}
+
+@media (max-width: 768px) {
+  .doctors-container {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  
+  .doctors-grid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+@media (min-width: 992px) {
+  .doctors-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+  }
+}
+
+/* Hero section with gradient */
+.hero-section {
+  background: linear-gradient(135deg, var(--teal-color) 0%, var(--lime-color) 100%);
+}
+
+/* Custom button styles */
+.btn-teal {
+  background-color: var(--teal-color);
+  border-color: var(--teal-color);
+  color: white;
+}
+
+.btn-teal:hover {
+  background-color: var(--teal-hover);
+  border-color: var(--teal-hover);
+  color: white;
+}
+
+.btn-lime {
+  background-color: var(--lime-color);
+  border-color: var(--lime-color);
+  color: #000;
+  font-weight: 500;
+}
+
+.btn-lime:hover {
+  background-color: var(--lime-hover);
+  border-color: var(--lime-hover);
+  color: #000;
+}
+
+.btn-outline-teal {
+  border-color: var(--teal-color);
+  color: var(--teal-color);
+}
+
+.btn-outline-teal:hover {
+  background-color: var(--teal-color);
+  border-color: var(--teal-color);
+  color: white;
+}
+
+/* Text colors */
+.text-teal {
+  color: var(--teal-color) !important;
+}
+
+.text-lime {
+  color: var(--lime-color) !important;
+}
+
+.border-teal {
+  border-color: var(--teal-color) !important;
+}
+
+/* Doctor card styles */
+.doctor-card {
+  border: none;
+  border-radius: 16px;
+  transition: all 0.3s ease;
+  overflow: hidden;
+}
+
+.doctor-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 25px rgba(0,0,0,0.15) !important;
+}
+
+.doctor-image {
+  width: 96px;
+  height: 96px;
+  background-color: #f8f9fa;
+  border-radius: 12px;
+  color: #6c757d;
+}
+
+/* Bio text truncation */
+.bio-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.4;
+}
+
+/* Appointment slider animation */
+.appointment-slider {
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    max-height: 1000px;
+    transform: translateY(0);
+  }
+}
+
+/* Time slot styles - legacy */
+.time-slot {
+  border: 2px solid var(--teal-color);
+  color: var(--teal-color);
+  transition: all 0.2s ease;
+}
+
+.time-slot:hover {
+  background-color: var(--teal-color);
+  border-color: var(--teal-color);
+  color: white;
+  transform: translateY(-1px);
+}
+
+/* Time section animation */
+.time-section {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Navigation hover effects with enhanced transitions */
+.nav-link {
+  transition: all 0.3s ease;
+  position: relative;
+  color: #6c757d !important;
+}
+
+.nav-link:hover {
+  color: var(--teal-color) !important;
+  transform: translateY(-2px);
+}
+
+.nav-link::after {
+  content: '';
+  position: absolute;
+  width: 0;
+  height: 2px;
+  bottom: -5px;
+  left: 50%;
+  background-color: var(--teal-color);
+  transition: all 0.3s ease;
+  transform: translateX(-50%);
+}
+
+.nav-link:hover::after {
+  width: 100%;
+}
+
+/* Auth dropdown styles with improved behavior */
+.auth-dropdown {
+  position: relative;
+}
+
+.dropdown-menu {
+  min-width: 160px;
+  border: none;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  border-radius: 8px;
+  z-index: 1000;
+  margin-top: 2px !important;
+}
+
+.dropdown-item {
+  padding: 10px 16px;
+  transition: all 0.2s ease;
+  border: none;
+  background: none;
+  width: 100%;
+  text-align: left;
+  font-size: 14px;
+}
+
+.dropdown-item:hover {
+  background-color: var(--teal-color);
+  color: white;
+}
+
+.dropdown-item:focus {
+  background-color: var(--teal-color);
+  color: white;
+}
+
+/* Calendar popup styles */
+.calendar-popup {
+  top: 100%;
+  right: 0;
+  margin-top: 5px;
+  border: 1px solid #dee2e6;
+}
+
+.calendar-grid {
+  font-size: 14px;
+}
+
+.calendar-popup .btn-sm {
+  font-size: 11px;
+  padding: 2px 4px;
+}
+
+.calendar-popup .btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
+/* Date selector styles */
+.date-selector-container {
+  margin: 20px 0;
+}
+
+.date-nav-btn {
+  border: 1px solid #dee2e6 !important;
+  background-color: white !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+}
+
+.date-nav-prev {
+  left: 5px !important;
+}
+
+.date-nav-next {
+  right: 5px !important;
+}
+
+.date-nav-btn:hover:not(:disabled) {
+  background-color: #f8f9fa !important;
+  border-color: #6c757d !important;
+}
+
+.date-nav-btn:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+.date-selector-scroll {
+  position: relative;
+  overflow: hidden;
+}
+
+.date-selector-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.date-selector-btn {
+  border: 2px solid #dee2e6 !important;
+  border-radius: 12px !important;
+  padding: 12px 16px !important;
+  background-color: white !important;
+  color: #6c757d !important;
+  min-width: 70px !important;
+  height: 70px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  transition: all 0.2s ease !important;
+  font-size: 14px !important;
+}
+
+.date-selector-btn:hover {
+  border-color: var(--teal-color) !important;
+  color: var(--teal-color) !important;
+  transform: translateY(-2px) !important;
+}
+
+.date-selected {
+  background-color: #FFD700 !important;
+  border-color: #FFD700 !important;
+  color: #000 !important;
+  font-weight: bold !important;
+}
+
+.date-unselected {
+  background-color: white !important;
+  border-color: #dee2e6 !important;
+  color: #6c757d !important;
+}
+
+.date-day {
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  text-transform: uppercase !important;
+  margin-bottom: 2px !important;
+}
+
+.date-number {
+  font-size: 18px !important;
+  font-weight: bold !important;
+  line-height: 1 !important;
+}
+
+/* Time slots styles */
+.time-slots-container {
+  margin: 20px 0;
+}
+
+.time-slot-btn {
+  border: 2px solid #007bff !important;
+  border-radius: 8px !important;
+  padding: 8px 16px !important;
+  background-color: white !important;
+  color: #007bff !important;
+  min-width: 90px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  transition: all 0.2s ease !important;
+}
+
+.time-slot-btn:hover {
+  background-color: #007bff !important;
+  color: white !important;
+  transform: translateY(-1px) !important;
+}
+
+.time-slot-btn:first-child {
+  background-color: #FFD700 !important;
+  border-color: #FFD700 !important;
+  color: #000 !important;
+  font-weight: bold !important;
+}
+
+/* Hide scrollbars */
+.date-selector-scroll > div::-webkit-scrollbar,
+.time-slots-container > div::-webkit-scrollbar {
+  display: none;
+}
+
+/* Calendar popup styles - removed */
+
+/* Info button styles */
+.info-btn {
+  top: 10px;
+  right: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.9);
+  border: 1px solid #dee2e6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  z-index: 10;
+}
+
+.info-btn:hover {
+  background-color: var(--teal-color);
+  color: white;
+  border-color: var(--teal-color);
+  transform: scale(1.1);
+}
+
+/* Search input custom styling */
+.hero-section .form-control {
+  border: none;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+.hero-section .form-control:focus {
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  border-color: transparent;
+}
+
+/* Footer link hover effects and text visibility */
+footer {
+  color: white !important;
+}
+
+footer .text-muted {
+  color: #d1d5db !important;
+}
+
+footer h5, footer h6 {
+  color: white !important;
+}
+
+footer a {
+  color: #d1d5db !important;
+  transition: color 0.2s ease;
+}
+
+footer a:hover {
+  color: var(--teal-color) !important;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .hero-section h2 {
+    font-size: 2.5rem;
+  }
+  
+  .hero-section .lead {
+    font-size: 1rem;
+  }
+  
+  .doctor-image {
+    width: 80px;
+    height: 80px;
+  }
+  
+  .display-5 {
+    font-size: 2rem;
+  }
+  
+  .auth-dropdown .dropdown-menu {
+    position: fixed !important;
+    top: 60px !important;
+    right: 10px !important;
+    left: auto !important;
+  }
+  
+  .nav-link::after {
+    display: none;
+  }
+  
+  .date-selector-btn {
+    min-width: 60px !important;
+    height: 60px !important;
+    font-size: 12px !important;
+  }
+  
+  .date-number {
+    font-size: 16px !important;
+  }
+  
+  .date-nav-btn {
+    width: 32px !important;
+    height: 32px !important;
+  }
+  
+  .time-slot-btn {
+    min-width: 80px !important;
+    font-size: 12px !important;
+  }
+}
+
+@media (max-width: 576px) {
+  .hero-section h2 {
+    font-size: 2rem;
+  }
+  
+  .card-body {
+    padding: 1rem !important;
+  }
+  
+  .appointment-slider {
+    padding: 1rem !important;
+  }
+  
+  .modal-dialog {
+    margin: 10px;
+  }
+  
+  .info-btn {
+    width: 25px;
+    height: 25px;
+    font-size: 12px;
+  }
+  
+  .date-selector-btn {
+    min-width: 50px !important;
+    height: 55px !important;
+    padding: 8px 12px !important;
+  }
+  
+  .time-slot-btn {
+    min-width: 70px !important;
+    padding: 6px 12px !important;
+  }
+}

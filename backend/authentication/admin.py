@@ -10,7 +10,9 @@ admin.site.register(Language)
 
 @admin.register(Doctor)
 class DoctorAdmin(admin.ModelAdmin):
-    list_display = ('first_name', 'last_name', 'get_specialties')
+    list_display = ('first_name', 'last_name', 'degree', 'years_of_experience', 'get_specialties')
+    list_filter = ('years_of_experience', 'specialties')
+    search_fields = ('first_name', 'last_name', 'degree')
     
     def get_specialties(self, obj):
         return ", ".join([s.name for s in obj.specialties.all()])

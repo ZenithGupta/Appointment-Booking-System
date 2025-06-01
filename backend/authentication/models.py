@@ -28,6 +28,15 @@ class Doctor(models.Model):
     )
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
+    degree = models.CharField(
+        max_length=200,
+        default="MBBS", 
+        help_text="Doctor's degree(s) e.g., MBBS, MD, PhD"
+    )
+    years_of_experience = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of years of medical experience"
+    )
     specialties = models.ManyToManyField(Specialty, related_name='doctors')
     languages = models.ManyToManyField(Language, related_name='doctors')
     bio = models.TextField()
@@ -35,6 +44,7 @@ class Doctor(models.Model):
     
     def __str__(self):
         return f"Dr. {self.first_name} {self.last_name}"
+
 
 class DoctorSchedule(models.Model):
     TIME_RANGE_CHOICES = [
