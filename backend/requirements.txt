@@ -1,11 +1,32 @@
-asgiref==3.8.1
+# Django Core
 Django==5.2.1
-django-cors-headers==4.7.0
 djangorestframework==3.16.0
-djangorestframework_simplejwt==5.5.0
-pillow==11.2.1
+
+# Authentication & JWT
+djangorestframework-simplejwt==5.5.0
 PyJWT==2.9.0
-setuptools==78.1.1
+
+# CORS Support
+django-cors-headers==4.7.0
+
+# Image Processing
+Pillow==11.2.1
+
+# Database Support
+# For PostgreSQL (uncomment if needed):
+# psycopg2-binary==2.9.9
+
+# Development Tools
+# django-debug-toolbar==4.2.0  # Uncomment for development debugging
+
+# Environment Variables
+# python-decouple==3.8  # Uncomment if using .env files
+
+# Core Python Dependencies
+asgiref==3.8.1
 sqlparse==0.5.3
 tzdata==2025.2
+
+# Build Tools
+setuptools==78.1.1
 wheel==0.45.1

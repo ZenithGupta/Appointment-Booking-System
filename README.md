@@ -1,123 +1,239 @@
-# Complete API Endpoints List
+# Doctor Appointment Booking System
 
-## 🔐 **Authentication Endpoints**
+A full-stack web application for managing doctor appointments with Django REST API backend and React frontend.
 
-| Method | Endpoint | Functionality | Permission |
-|--------|----------|---------------|------------|
-| `POST` | `/api/register/` | User registration | Public |
-| `POST` | `/api/login/` | User login (JWT) | Public |
-| `POST` | `/api/logout/` | User logout | Authenticated |
-| `POST` | `/api/token/refresh/` | Refresh JWT token | Public |
-| `GET` | `/api/profile/` | Get user profile | Authenticated |
-| `PUT` | `/api/profile/` | Update user profile | Authenticated |
-| `PATCH` | `/api/profile/` | Partial update user profile | Authenticated |
-| `POST` | `/api/change-password/` | Change password | Authenticated |
+## 🏗️ Project Structure
 
----
+```
+appointment-booking/
+├── backend/                 # Django REST API
+│   ├── authentication/     # Main Django app
+│   ├── backend/            # Django project settings
+│   ├── venv/              # Python virtual environment
+│   ├── manage.py          # Django management script
+│   ├── requirements.txt   # Python dependencies
+│   └── README.md          # Backend documentation
+├── frontend/              # React application
+│   ├── src/              # React source code
+│   ├── public/           # Static assets
+│   ├── package.json      # Node.js dependencies
+│   └── README.md         # Frontend documentation
+├── docs/                 # Project documentation
+├── .gitignore           # Git ignore rules
+└── README.md            # This file
+```
 
-## 🩺 **Doctor Management Endpoints**
+## 🚀 Quick Start
 
-### **Specialties**
-| Method | Endpoint | Functionality | Permission |
-|--------|----------|---------------|------------|
-| `GET` | `/api/specialties/` | List all specialties | Public |
-| `POST` | `/api/specialties/` | Create new specialty | Authenticated |
-| `GET` | `/api/specialties/{id}/` | Get specialty details | Public |
-| `PUT` | `/api/specialties/{id}/` | Update specialty | Authenticated |
-| `PATCH` | `/api/specialties/{id}/` | Partial update specialty | Authenticated |
-| `DELETE` | `/api/specialties/{id}/` | Delete specialty | Authenticated |
+### Prerequisites
+- Python 3.8+
+- Node.js 16+
+- Git
 
-### **Languages**
-| Method | Endpoint | Functionality | Permission |
-|--------|----------|---------------|------------|
-| `GET` | `/api/languages/` | List all languages | Public |
-| `POST` | `/api/languages/` | Create new language | Authenticated |
-| `GET` | `/api/languages/{id}/` | Get language details | Public |
-| `PUT` | `/api/languages/{id}/` | Update language | Authenticated |
-| `PATCH` | `/api/languages/{id}/` | Partial update language | Authenticated |
-| `DELETE` | `/api/languages/{id}/` | Delete language | Authenticated |
+### 1. Clone Repository
+```bash
+git clone <your-repo-url>
+cd appointment-booking
+```
 
-### **Doctors**
-| Method | Endpoint | Functionality | Permission |
-|--------|----------|---------------|------------|
-| `GET` | `/api/doctors/` | List all doctors | Public |
-| `POST` | `/api/doctors/` | Create new doctor | Authenticated |
-| `GET` | `/api/doctors/{id}/` | Get doctor details | Public |
-| `PUT` | `/api/doctors/{id}/` | Update doctor | Authenticated |
-| `PATCH` | `/api/doctors/{id}/` | Partial update doctor | Authenticated |
-| `DELETE` | `/api/doctors/{id}/` | Delete doctor | Authenticated |
-| `GET` | `/api/doctors/by-specialty/{specialty_id}/` | Get doctors by specialty | Public |
-| `GET` | `/api/doctors/{doctor_id}/available-slots/` | Get doctor's available slots | Public |
+### 2. Backend Setup
+```bash
+cd backend
 
-### **Doctor Schedules**
-| Method | Endpoint | Functionality | Permission |
-|--------|----------|---------------|------------|
-| `GET` | `/api/schedules/` | List all schedules | Public |
-| `POST` | `/api/schedules/` | Create new schedule | Authenticated |
-| `GET` | `/api/schedules/{id}/` | Get schedule details | Public |
-| `PUT` | `/api/schedules/{id}/` | Update schedule | Authenticated |
-| `PATCH` | `/api/schedules/{id}/` | Partial update schedule | Authenticated |
-| `DELETE` | `/api/schedules/{id}/` | Delete schedule | Authenticated |
-| `GET` | `/api/doctors/{doctor_id}/schedules/{schedule_id}/available-slots/` | Get specific schedule's available time slots | Public |
+# Create and activate virtual environment
+python -m venv venv
 
----
+# Windows
+venv\Scripts\activate
+# macOS/Linux
+source venv/bin/activate
 
-## 🏥 **Patient Management Endpoints**
+# Install dependencies
+pip install -r requirements.txt
 
-### **Patient Profiles**
-| Method | Endpoint | Functionality | Permission |
-|--------|----------|---------------|------------|
-| `GET` | `/api/patient/profile/` | List user's patient profiles | Authenticated (Own) |
-| `POST` | `/api/patient/profile/` | Create patient profile | Authenticated (Own) |
-| `GET` | `/api/patient/profile/{id}/` | Get patient profile details | Authenticated (Own) |
-| `PUT` | `/api/patient/profile/{id}/` | Update patient profile | Authenticated (Own) |
-| `PATCH` | `/api/patient/profile/{id}/` | Partial update patient profile | Authenticated (Own) |
-| `DELETE` | `/api/patient/profile/{id}/` | Delete patient profile | Authenticated (Own) |
+# Run migrations
+python manage.py makemigrations
+python manage.py migrate
 
-### **Medical History**
-| Method | Endpoint | Functionality | Permission |
-|--------|----------|---------------|------------|
-| `GET` | `/api/patient/medical-history/` | List user's medical history | Authenticated (Own) |
-| `POST` | `/api/patient/medical-history/` | Create medical history record | Authenticated (Own) |
-| `GET` | `/api/patient/medical-history/{id}/` | Get medical history details | Authenticated (Own) |
-| `PUT` | `/api/patient/medical-history/{id}/` | Update medical history | Authenticated (Own) |
-| `PATCH` | `/api/patient/medical-history/{id}/` | Partial update medical history | Authenticated (Own) |
-| `DELETE` | `/api/patient/medical-history/{id}/` | Delete medical history | Authenticated (Own) |
+# Create superuser (optional)
+python manage.py createsuperuser
 
----
+# Start backend server
+python manage.py runserver
+```
+**Backend runs at:** `http://localhost:8000`
 
-## 📅 **Appointment Management Endpoints**
+### 3. Frontend Setup
+```bash
+# In a new terminal
+cd frontend
 
-### **Appointments**
-| Method | Endpoint | Functionality | Permission |
-|--------|----------|---------------|------------|
-| `GET` | `/api/appointment/my-appointments/` | List user's appointments | Authenticated (Own) |
-| `POST` | `/api/appointment/my-appointments/` | Create appointment (alternative method) | Authenticated (Own) |
-| `GET` | `/api/appointment/my-appointments/{id}/` | Get appointment details | Authenticated (Own) |
-| `PUT` | `/api/appointment/my-appointments/{id}/` | Update appointment | Authenticated (Own) |
-| `PATCH` | `/api/appointment/my-appointments/{id}/` | Partial update appointment | Authenticated (Own) |
-| `DELETE` | `/api/appointment/my-appointments/{id}/` | Delete appointment | Authenticated (Own) |
+# Install dependencies
+npm install
 
-### **Appointment Actions**
-| Method | Endpoint | Functionality | Permission |
-|--------|----------|---------------|------------|
-| `POST` | `/api/appointment/book/{doctor_id}/` | Book appointment with doctor | Authenticated |
-| `POST` | `/api/appointment/cancel/{appointment_id}/` | Cancel appointment | Authenticated (Own) |
+# Create environment file
+cp .env.example .env
 
----
+# Start frontend development server
+npm run dev
+```
+**Frontend runs at:** `http://localhost:3000`
 
-## 📋 **Quick Reference - What You Can Create**
+## 📋 Features
 
-### **✅ Can Create via Browsable API:**
-1. **Specialties** → `POST /api/specialties/`
-2. **Languages** → `POST /api/languages/`
-3. **Doctors** → `POST /api/doctors/`
-4. **Doctor Schedules** → `POST /api/schedules/`
-5. **Patient Profiles** → `POST /api/patient/profile/`
-6. **Medical History** → `POST /api/patient/medical-history/`
-7. **Appointments** → `POST /api/appointment/my-appointments/`
+### Backend API
+- **JWT Authentication**: Secure user registration and login
+- **Doctor Management**: Profiles with specialties and schedules
+- **Appointment System**: Slot-based and range-based booking
+- **Patient Management**: Profiles and medical history
+- **Admin Interface**: Django admin for data management
 
-### **🔒 Permission Levels:**
-- **Public**: Anyone can access
-- **Authenticated**: Must be logged in
-- **Authenticated (Own)**: Must be logged in and can only access own data
+### Frontend Application
+- **Modern React UI**: Responsive design with Vite
+- **User Authentication**: Login/register with JWT
+- **Doctor Discovery**: Browse doctors by specialty
+- **Appointment Booking**: Interactive booking interface
+- **User Dashboard**: Manage appointments and profile
+
+## 🔗 API Endpoints
+
+### Authentication
+- `POST /api/register/` - User registration
+- `POST /api/login/` - User login (email-based)
+- `POST /api/logout/` - User logout
+- `GET/PUT /api/profile/` - User profile management
+
+### Doctors & Schedules
+- `GET /api/doctors/` - List doctors
+- `GET /api/specialties/` - List specialties
+- `GET /api/doctors/{id}/available-slots/` - Available slots
+
+### Appointments
+- `POST /api/appointment/book/{doctor_id}/` - Book appointment
+- `GET /api/appointment/my-appointments/` - User's appointments
+- `POST /api/appointment/cancel/{id}/` - Cancel appointment
+
+[📖 **Complete API Documentation**](./backend/README.md)
+
+## 🛠️ Development
+
+### Backend Development
+```bash
+cd backend
+
+# Activate virtual environment
+venv\Scripts\activate  # Windows
+source venv/bin/activate  # macOS/Linux
+
+# Run tests
+python manage.py test
+
+# Create migrations
+python manage.py makemigrations
+
+# Access admin interface
+# http://localhost:8000/admin
+```
+
+### Frontend Development
+```bash
+cd frontend
+
+# Development server with hot reload
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview production build
+npm run preview
+
+# Lint code
+npm run lint
+```
+
+## 🚀 Deployment
+
+### Backend (Django)
+1. Set environment variables for production
+2. Configure production database (PostgreSQL recommended)
+3. Set `DEBUG = False` in settings
+4. Configure static files serving
+5. Deploy to platform (Heroku, DigitalOcean, AWS, etc.)
+
+### Frontend (React)
+1. Update `.env` with production API URL
+2. Build: `npm run build`
+3. Deploy `dist` folder to hosting service
+4. Configure routing for SPA (Single Page Application)
+
+## 🧪 Testing
+
+### Backend Tests
+```bash
+cd backend
+python manage.py test
+```
+
+### Frontend Tests
+```bash
+cd frontend
+npm test
+```
+
+## 📁 Key Files
+
+### Backend
+- `backend/authentication/models.py` - Database models
+- `backend/authentication/views.py` - API endpoints
+- `backend/authentication/serializers.py` - Data serialization
+- `backend/backend/settings.py` - Django configuration
+
+### Frontend
+- `frontend/src/App.jsx` - Main React component
+- `frontend/src/main.jsx` - Application entry point
+- `frontend/vite.config.js` - Build configuration
+- `frontend/package.json` - Dependencies and scripts
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create feature branch: `git checkout -b feature/amazing-feature`
+3. Commit changes: `git commit -m 'Add amazing feature'`
+4. Push to branch: `git push origin feature/amazing-feature`
+5. Open Pull Request
+
+## 📚 Documentation
+
+- [Backend Documentation](./backend/README.md)
+- [Frontend Documentation](./frontend/README.md)
+- [API Reference](./docs/api.md)
+- [Deployment Guide](./docs/deployment.md)
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **Backend server won't start**
+   - Ensure virtual environment is activated
+   - Check if all dependencies are installed
+   - Verify database migrations are up to date
+
+2. **Frontend build fails**
+   - Check Node.js version (requires 16+)
+   - Clear node_modules: `rm -rf node_modules && npm install`
+   - Verify environment variables in `.env`
+
+3. **API connection issues**
+   - Ensure backend is running on port 8000
+   - Check CORS settings in Django
+   - Verify API base URL in frontend `.env`
+
+4. **Authentication not working**
+   - Check JWT token expiration
+   - Verify email/password are correct
+   - Ensure user account is active
+
+## 🏥 About
+
+This Doctor Appointment Booking System provides a complete solution for healthcare providers to manage appointments online. Built with modern technologies and following best practices for security, scalability, and user experience.
