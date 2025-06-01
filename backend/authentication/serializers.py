@@ -1,20 +1,59 @@
 from rest_framework import serializers
 from django.contrib.auth.models import User
+from django.contrib.auth import authenticate
 from .models import (
     Doctor, DoctorSchedule, Specialty, Language, TimeSlot,
     Patient, MedicalHistory, Appointment
 )
 
-# User serializers
+# User serializers with proper password handling
 class UserSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(write_only=True, min_length=6)
+    
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name']
-        extra_kwargs = {'password': {'write_only': True}}
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'password']
+        extra_kwargs = {
+            'password': {'write_only': True},
+            'email': {'required': True}
+        }
     
     def create(self, validated_data):
+        # Extract password and create user with proper password hashing
+        password = validated_data.pop('password')
         user = User.objects.create_user(**validated_data)
+        user.set_password(password)  # This properly hashes the password
+        user.save()
         return user
+
+# Custom login serializer for email-based authentication
+class LoginSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    password = serializers.CharField()
+    
+    def validate(self, data):
+        email = data.get('email')
+        password = data.get('password')
+        
+        if email and password:
+            # Find user by email
+            try:
+                user = User.objects.get(email=email)
+                # Authenticate using username and password
+                user = authenticate(username=user.username, password=password)
+                if user:
+                    if user.is_active:
+                        data['user'] = user
+                    else:
+                        raise serializers.ValidationError('User account is disabled.')
+                else:
+                    raise serializers.ValidationError('Invalid credentials.')
+            except User.DoesNotExist:
+                raise serializers.ValidationError('Invalid credentials.')
+        else:
+            raise serializers.ValidationError('Email and password are required.')
+        
+        return data
 
 # Doctor related serializers
 class SpecialtySerializer(serializers.ModelSerializer):
