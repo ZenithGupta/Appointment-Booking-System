@@ -1,4 +1,4 @@
-/* Custom CSS for Bootstrap Version */
+/* Custom CSS for Bootstrap Version - ORIGINAL LAYOUT RESTORED */
 
 /* Custom color variables */
 :root {
@@ -94,7 +94,7 @@ footer .container-fluid {
   }
 }
 
-/* Custom doctors grid layout */
+/* ORIGINAL: Custom doctors grid layout */
 .doctors-container {
   width: 100%;
   max-width: 100%;
@@ -116,10 +116,32 @@ footer .container-fluid {
   max-width: 100%;
 }
 
+/* FIXED: No-doctors message - spans full grid like before */
 .no-doctors-message {
   grid-column: 1 / -1;
   text-align: center;
-  padding: 3rem 0;
+  padding: 4rem 2rem;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin: 2rem 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+.no-doctors-message h4 {
+  color: #6c757d;
+  margin-bottom: 1rem;
+  font-size: 1.5rem;
+}
+
+.no-doctors-message p {
+  color: #6c757d;
+  margin-bottom: 1.5rem;
+}
+
+.no-doctors-message .btn {
+  margin: 0 0.5rem;
 }
 
 @media (max-width: 768px) {
@@ -131,6 +153,11 @@ footer .container-fluid {
   .doctors-grid {
     grid-template-columns: 1fr;
     gap: 1rem;
+  }
+  
+  .no-doctors-message {
+    padding: 3rem 1.5rem;
+    margin: 1rem 0;
   }
 }
 
@@ -336,28 +363,6 @@ footer .container-fluid {
   color: white;
 }
 
-/* Calendar popup styles */
-.calendar-popup {
-  top: 100%;
-  right: 0;
-  margin-top: 5px;
-  border: 1px solid #dee2e6;
-}
-
-.calendar-grid {
-  font-size: 14px;
-}
-
-.calendar-popup .btn-sm {
-  font-size: 11px;
-  padding: 2px 4px;
-}
-
-.calendar-popup .btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.4;
-}
-
 /* Date selector styles */
 .date-selector-container {
   margin: 20px 0;
@@ -484,8 +489,6 @@ footer .container-fluid {
 .time-slots-container > div::-webkit-scrollbar {
   display: none;
 }
-
-/* Calendar popup styles - removed */
 
 /* Info button styles */
 .info-btn {

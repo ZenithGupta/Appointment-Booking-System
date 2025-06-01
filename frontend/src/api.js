@@ -148,7 +148,7 @@ export const authAPI = {
   login: async (userData) => {
     try {
       const loginData = {
-        username: userData.email, // Use email as username for login
+        email: userData.email,
         password: userData.password,
       };
 

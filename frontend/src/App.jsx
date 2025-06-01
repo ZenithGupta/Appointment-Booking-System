@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
-import { authAPI } from './api';
+import { authAPI, doctorsAPI, specialtiesAPI, appointmentsAPI } from './api';
 
-// Simple Icon Components
+// Simple Icon Components (keep the same)
 const CalendarIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -53,8 +53,17 @@ const FilterIcon = () => (
 );
 
 const App = () => {
+  // State for real data
+  const [doctors, setDoctors] = useState([]);
+  const [specialties, setSpecialties] = useState([]);
+  const [availableSlots, setAvailableSlots] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [doctorsLoading, setDoctorsLoading] = useState(false);
+
+  // UI state
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
+  const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
   const [currentDateIndex, setCurrentDateIndex] = useState(0);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [showAuthDropdown, setShowAuthDropdown] = useState(false);
@@ -63,8 +72,8 @@ const App = () => {
   
   // Auth popup states
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authStep, setAuthStep] = useState('mobile'); // 'mobile', 'otp', 'profile', 'login-form'
-  const [authMode, setAuthMode] = useState('login'); // 'login' or 'register'
+  const [authStep, setAuthStep] = useState('mobile');
+  const [authMode, setAuthMode] = useState('login');
   const [userFormData, setUserFormData] = useState({
     mobileNumber: '',
     otp: '',
@@ -92,6 +101,74 @@ const App = () => {
     checkAuth();
   }, []);
 
+  // Load initial data
+  useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  // Load doctors when specialty filter changes
+  useEffect(() => {
+    loadDoctors();
+  }, [selectedSpecialty]);
+
+  const loadInitialData = async () => {
+    setLoading(true);
+    try {
+      // Load specialties
+      const specialtiesResult = await specialtiesAPI.getAll();
+      if (specialtiesResult.success) {
+        setSpecialties(specialtiesResult.data);
+      }
+
+      // Load all doctors initially
+      await loadDoctors();
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDoctors = async () => {
+    setDoctorsLoading(true);
+    try {
+      let doctorsResult;
+      
+      if (selectedSpecialty === 'all') {
+        doctorsResult = await doctorsAPI.getAll();
+      } else {
+        const specialty = specialties.find(s => s.name === selectedSpecialty);
+        if (specialty) {
+          doctorsResult = await doctorsAPI.getBySpecialty(specialty.id);
+        } else {
+          doctorsResult = await doctorsAPI.getAll();
+        }
+      }
+
+      if (doctorsResult.success) {
+        setDoctors(doctorsResult.data);
+      }
+    } catch (error) {
+      console.error('Error loading doctors:', error);
+    } finally {
+      setDoctorsLoading(false);
+    }
+  };
+
+  const loadAvailableSlots = async (doctorId) => {
+    try {
+      const slotsResult = await doctorsAPI.getAvailableSlots(doctorId);
+      if (slotsResult.success) {
+        setAvailableSlots(prev => ({
+          ...prev,
+          [doctorId]: slotsResult.data
+        }));
+      }
+    } catch (error) {
+      console.error('Error loading available slots:', error);
+    }
+  };
+
   // Generate dates for the next 30 days
   const generateDates = () => {
     const dates = [];
@@ -112,84 +189,6 @@ const App = () => {
 
   const dates = generateDates();
 
-  // Sample time slots
-  const timeSlots = [
-    '09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '11:30 AM',
-    '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM', '04:00 PM', '04:30 PM'
-  ];
-
-  // Sample doctors data
-  const allDoctors = [
-    {
-      id: 1,
-      name: 'Dr. Rajesh Kumar',
-      specialty: 'Cardiologist',
-      experience: '15+ Years Experience',
-      location: 'Apollo Main Hospital',
-      degree: 'MBBS, MD Cardiology',
-      bio: 'Dr. Rajesh Kumar is a highly experienced Cardiologist with over 15 years of dedicated practice in cardiovascular medicine. He specializes in interventional cardiology and has performed over 5000 successful procedures.'
-    },
-    {
-      id: 2,
-      name: 'Dr. Priya Sharma',
-      specialty: 'Neurologist',
-      experience: '12+ Years Experience',
-      location: 'Apollo Neuro Center',
-      degree: 'MBBS, MD Neurology',
-      bio: 'Dr. Priya Sharma is a renowned Neurologist specializing in stroke care and neurodegenerative diseases. Her expertise includes advanced neuroimaging and minimally invasive procedures.'
-    },
-    {
-      id: 3,
-      name: 'Dr. Amit Patel',
-      specialty: 'Orthopedic Surgeon',
-      experience: '18+ Years Experience',
-      location: 'Apollo Bone & Joint',
-      degree: 'MBBS, MS Orthopedics',
-      bio: 'Dr. Amit Patel is a leading Orthopedic Surgeon with extensive experience in joint replacement surgeries and sports medicine. He has successfully performed over 3000 joint replacement procedures.'
-    },
-    {
-      id: 4,
-      name: 'Dr. Sneha Reddy',
-      specialty: 'Pediatrician',
-      experience: '10+ Years Experience',
-      location: 'Apollo Children Hospital',
-      degree: 'MBBS, MD Pediatrics',
-      bio: 'Dr. Sneha Reddy is a compassionate Pediatrician specializing in child development and pediatric emergency care. She is known for her gentle approach with children and comprehensive care.'
-    },
-    {
-      id: 5,
-      name: 'Dr. Vikram Singh',
-      specialty: 'Gastroenterologist',
-      experience: '14+ Years Experience',
-      location: 'Apollo Digestive Health',
-      degree: 'MBBS, MD Gastroenterology',
-      bio: 'Dr. Vikram Singh is an expert Gastroenterologist with specialization in advanced endoscopic procedures and liver diseases. He has been recognized for his innovative treatment approaches.'
-    },
-    {
-      id: 6,
-      name: 'Dr. Kavitha Nair',
-      specialty: 'Dermatologist',
-      experience: '11+ Years Experience',
-      location: 'Apollo Skin Care',
-      degree: 'MBBS, MD Dermatology',
-      bio: 'Dr. Kavitha Nair is a skilled Dermatologist specializing in cosmetic dermatology and skin cancer treatment. She is known for her expertise in laser treatments and advanced skin care procedures.'
-    }
-  ];
-
-  // Get unique specialties for the filter
-  const specialties = useMemo(() => {
-    const uniqueSpecialties = [...new Set(allDoctors.map(doctor => doctor.specialty))];
-    return uniqueSpecialties.sort();
-  }, []);
-
-  // Filter doctors based on selected specialty
-  const filteredDoctors = useMemo(() => {
-    if (selectedSpecialty === 'all') {
-      return allDoctors;
-    }
-    return allDoctors.filter(doctor => doctor.specialty === selectedSpecialty);
-  }, [selectedSpecialty]);
-
   const nextDates = () => {
     if (currentDateIndex < dates.length - 7) {
       setCurrentDateIndex(currentDateIndex + 1);
@@ -206,7 +205,7 @@ const App = () => {
     setAuthMode('login');
     setShowAuthModal(true);
     setShowAuthDropdown(false);
-    setAuthStep('login-form'); // Go directly to login form
+    setAuthStep('login-form');
     setFormErrors({});
   };
 
@@ -214,7 +213,7 @@ const App = () => {
     setAuthMode('register');
     setShowAuthModal(true);
     setShowAuthDropdown(false);
-    setAuthStep('mobile'); // Start with mobile for registration
+    setAuthStep('mobile');
     setFormErrors({});
   };
 
@@ -224,71 +223,65 @@ const App = () => {
     setIsLoggedIn(false);
     setSelectedDoctor(null);
     setSelectedDate(null);
+    setSelectedTimeSlot(null);
     setUserName('');
     setUserFormData({
       mobileNumber: '',
       otp: '',
       name: '',
       email: '',
+      password: '',
       dateOfBirth: ''
     });
     setIsLoading(false);
   };
 
+  // Auth form validation (keep existing validation functions)
   const validateMobile = () => {
     const errors = {};
-    
     if (!userFormData.mobileNumber.trim()) {
       errors.mobileNumber = 'Mobile number is required';
     } else if (!/^\d{10}$/.test(userFormData.mobileNumber.replace(/\s/g, ''))) {
       errors.mobileNumber = 'Please enter a valid 10-digit mobile number';
     }
-    
     return errors;
   };
 
   const validateLogin = () => {
     const errors = {};
-    
     if (!userFormData.email.trim()) {
       errors.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userFormData.email)) {
       errors.email = 'Please enter a valid email address';
     }
-    
     if (!userFormData.password.trim()) {
       errors.password = 'Password is required';
     }
-    
     return errors;
   };
 
   const validateProfile = () => {
     const errors = {};
-    
     if (!userFormData.name.trim()) {
       errors.name = 'Name is required';
     }
-    
     if (!userFormData.email.trim()) {
       errors.email = 'Email is required';
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userFormData.email)) {
       errors.email = 'Please enter a valid email address';
     }
-    
     if (!userFormData.password.trim()) {
       errors.password = 'Password is required';
     } else if (userFormData.password.length < 6) {
       errors.password = 'Password must be at least 6 characters long';
     }
-    
     if (!userFormData.dateOfBirth) {
       errors.dateOfBirth = 'Date of birth is required';
     }
-    
     return errors;
   };
 
+  // Auth form handlers (keep existing handlers)
   const handleMobileSubmit = async (e) => {
     e.preventDefault();
     const errors = validateMobile();
@@ -301,8 +294,6 @@ const App = () => {
     setIsLoading(true);
     setFormErrors({});
     
-    // For demo purposes, just proceed to OTP step
-    // In real implementation, you would send OTP here
     setTimeout(() => {
       setAuthStep('otp');
       setIsLoading(false);
@@ -312,12 +303,7 @@ const App = () => {
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     
-    console.log('🔍 Current form data:', userFormData); // Debug log
-    console.log('🔍 Email value:', userFormData.email); // Debug log
-    console.log('🔍 Password value:', userFormData.password); // Debug log
-    
     const errors = validateLogin();
-    
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
@@ -362,7 +348,6 @@ const App = () => {
     e.preventDefault();
     
     if (userFormData.otp === '111') {
-      // Only for registration - go to profile step
       setAuthStep('profile');
       setFormErrors({});
     } else {
@@ -414,13 +399,11 @@ const App = () => {
   };
 
   const handleInputChange = (field, value) => {
-    console.log(`🔍 Field update: ${field} = ${value}`); // Debug log
     setUserFormData(prev => ({
       ...prev,
       [field]: value
     }));
     
-    // Clear error when user starts typing
     if (formErrors[field]) {
       setFormErrors(prev => ({
         ...prev,
@@ -438,6 +421,7 @@ const App = () => {
       otp: '',
       name: '',
       email: '',
+      password: '',
       dateOfBirth: ''
     });
   };
@@ -446,37 +430,112 @@ const App = () => {
     setShowDoctorModal(doctorId);
   };
 
-  const handleBookAppointment = (doctorId) => {
+  const handleBookAppointment = async (doctorId) => {
     if (selectedDoctor === doctorId) {
       setSelectedDoctor(null);
       setSelectedDate(null);
+      setSelectedTimeSlot(null);
       setCurrentDateIndex(0);
     } else {
       setSelectedDoctor(doctorId);
       setSelectedDate(null);
+      setSelectedTimeSlot(null);
       setCurrentDateIndex(0);
+      
+      // Load available slots for this doctor
+      await loadAvailableSlots(doctorId);
     }
   };
 
   const handleDateSelect = (date) => {
     setSelectedDate(date);
+    setSelectedTimeSlot(null);
+  };
+
+  const handleTimeSlotSelect = (slot) => {
+    setSelectedTimeSlot(slot);
   };
 
   const handleSpecialtyChange = (specialty) => {
     setSelectedSpecialty(specialty);
-    // Reset selection when filter changes
     setSelectedDoctor(null);
     setSelectedDate(null);
+    setSelectedTimeSlot(null);
     setCurrentDateIndex(0);
+  };
+
+  const handleConfirmAppointment = async () => {
+    if (!isLoggedIn) {
+      handleLogin();
+      return;
+    }
+
+    if (!selectedDoctor || !selectedDate || !selectedTimeSlot) {
+      alert('Please select a doctor, date, and time slot');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const appointmentData = {
+        schedule_id: selectedTimeSlot.schedule_id,
+        time_slot_id: selectedTimeSlot.id,
+        notes: 'Appointment booked through website'
+      };
+
+      const result = await appointmentsAPI.book(selectedDoctor, appointmentData);
+      
+      if (result.success) {
+        alert('Appointment booked successfully!');
+        setSelectedDoctor(null);
+        setSelectedDate(null);
+        setSelectedTimeSlot(null);
+        // Reload available slots
+        await loadAvailableSlots(selectedDoctor);
+      } else {
+        alert('Failed to book appointment: ' + result.error);
+      }
+    } catch (error) {
+      alert('Error booking appointment. Please try again.');
+      console.error('Booking error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Get available time slots for selected date
+  const getTimeSlotsForDate = (doctorId, selectedDate) => {
+    if (!selectedDate || !availableSlots[doctorId]) {
+      return [];
+    }
+
+    const slotsForDate = availableSlots[doctorId].filter(schedule => 
+      schedule.date === selectedDate.fullDate
+    );
+
+    const timeSlots = [];
+    slotsForDate.forEach(schedule => {
+      if (schedule.available_time_slots && Array.isArray(schedule.available_time_slots)) {
+        schedule.available_time_slots.forEach(slot => {
+          timeSlots.push({
+            ...slot,
+            schedule_id: schedule.id,
+            formatted_time: slot.formatted_time || `${slot.start_time} - ${slot.end_time}`
+          });
+        });
+      }
+    });
+
+    return timeSlots;
   };
 
   const DoctorCard = ({ doctor }) => {
     const isExpanded = selectedDoctor === doctor.id;
+    const doctorSlots = availableSlots[doctor.id] || [];
 
     return (
       <div className="doctor-card-wrapper">
         <div className="card doctor-card h-100 shadow-sm position-relative">
-          {/* Info Button */}
           <button 
             className="btn btn-sm btn-light info-btn position-absolute"
             onClick={() => handleShowDoctorDetails(doctor.id)}
@@ -494,15 +553,20 @@ const App = () => {
               </div>
               
               <div className="col">
-                <h5 className="card-title mb-1 fw-bold">{doctor.name}</h5>
-                <p className="text-muted mb-1">{doctor.specialty}</p>
+                <h5 className="card-title mb-1 fw-bold">Dr. {doctor.first_name} {doctor.last_name}</h5>
+                <p className="text-muted mb-1">
+                  {doctor.specialties && doctor.specialties.length > 0 
+                    ? doctor.specialties.map(s => s.name).join(', ')
+                    : 'General Practitioner'
+                  }
+                </p>
                 <p className="small text-secondary mb-2">{doctor.degree}</p>
-                <p className="small fw-medium mb-2 text-success">{doctor.experience}</p>
+                <p className="small fw-medium mb-2 text-success">{doctor.years_of_experience}+ Years Experience</p>
                 
                 <div className="d-flex align-items-center gap-3 mb-3">
                   <div className="d-flex align-items-center gap-1 text-muted">
                     <MapPinIcon />
-                    <span className="small">{doctor.location}</span>
+                    <span className="small">Apollo Hospital</span>
                   </div>
                 </div>
                 
@@ -511,6 +575,7 @@ const App = () => {
                 <button
                   onClick={() => handleBookAppointment(doctor.id)}
                   className={`btn fw-medium ${isExpanded ? 'btn-lime' : 'btn-teal'}`}
+                  disabled={doctorsLoading}
                 >
                   {isExpanded ? 'Select Date & Time' : 'Book Appointment'}
                 </button>
@@ -548,20 +613,27 @@ const App = () => {
                 </div>
                 
                 <div className="row g-2">
-                  {dates.slice(currentDateIndex, currentDateIndex + 7).map((dateObj, index) => (
-                    <div key={`${dateObj.fullDate}-${index}`} className="col">
-                      <button
-                        onClick={() => handleDateSelect(dateObj)}
-                        className={`btn w-100 text-center date-btn ${
-                          selectedDate?.fullDate === dateObj.fullDate ? 'btn-lime' : 'btn-outline-secondary'
-                        } ${dateObj.isToday ? 'border-teal border-2' : ''}`}
-                      >
-                        <div className="small fw-medium">{dateObj.day}</div>
-                        <div className="h6 mb-0">{dateObj.date}</div>
-                        <div className="small">{dateObj.month}</div>
-                      </button>
-                    </div>
-                  ))}
+                  {dates.slice(currentDateIndex, currentDateIndex + 7).map((dateObj, index) => {
+                    // Check if doctor has slots for this date
+                    const hasSlots = doctorSlots.some(schedule => schedule.date === dateObj.fullDate);
+                    
+                    return (
+                      <div key={`${dateObj.fullDate}-${index}`} className="col">
+                        <button
+                          onClick={() => hasSlots ? handleDateSelect(dateObj) : null}
+                          disabled={!hasSlots}
+                          className={`btn w-100 text-center date-btn ${
+                            selectedDate?.fullDate === dateObj.fullDate ? 'btn-lime' : 
+                            hasSlots ? 'btn-outline-secondary' : 'btn-outline-secondary opacity-50'
+                          } ${dateObj.isToday ? 'border-teal border-2' : ''}`}
+                        >
+                          <div className="small fw-medium">{dateObj.day}</div>
+                          <div className="h6 mb-0">{dateObj.date}</div>
+                          <div className="small">{dateObj.month}</div>
+                        </button>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -572,33 +644,57 @@ const App = () => {
                     Available Time Slots
                   </h6>
                   
-                  <div className="row g-2 mb-4">
-                    {timeSlots.map((slot, index) => (
-                      <div key={index} className="col-6 col-md-4 col-lg-3">
-                        <button className="btn btn-outline-teal w-100 time-slot">
-                          {slot}
-                        </button>
+                  {(() => {
+                    const timeSlots = getTimeSlotsForDate(doctor.id, selectedDate);
+                    
+                    if (timeSlots.length === 0) {
+                      return (
+                        <div className="text-center text-muted py-3">
+                          <p>No available time slots for this date</p>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="row g-2 mb-4">
+                        {timeSlots.map((slot, index) => (
+                          <div key={index} className="col-6 col-md-4 col-lg-3">
+                            <button 
+                              onClick={() => handleTimeSlotSelect(slot)}
+                              className={`btn w-100 time-slot ${
+                                selectedTimeSlot?.id === slot.id ? 'btn-lime' : 'btn-outline-teal'
+                              }`}
+                            >
+                              {slot.formatted_time}
+                            </button>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
                   
                   <div className="d-flex gap-2">
-                    {isLoggedIn ? (
-                      <button className="btn btn-lime flex-fill fw-medium">
-                        Confirm Appointment
-                      </button>
-                    ) : (
-                      <button 
-                        className="btn btn-lime flex-fill fw-medium"
-                        onClick={handleLogin}
-                      >
-                        Login to Confirm Appointment
-                      </button>
-                    )}
+                    <button 
+                      className="btn btn-lime flex-fill fw-medium"
+                      onClick={handleConfirmAppointment}
+                      disabled={!selectedTimeSlot || isLoading}
+                    >
+                      {isLoading ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                          Booking...
+                        </>
+                      ) : !isLoggedIn ? (
+                        'Login to Confirm Appointment'
+                      ) : (
+                        'Confirm Appointment'
+                      )}
+                    </button>
                     <button
                       onClick={() => {
                         setSelectedDoctor(null);
                         setSelectedDate(null);
+                        setSelectedTimeSlot(null);
                       }}
                       className="btn btn-outline-teal"
                     >
@@ -619,6 +715,19 @@ const App = () => {
       </div>
     );
   };
+
+  if (loading) {
+    return (
+      <div className="min-vh-100 d-flex align-items-center justify-content-center">
+        <div className="text-center">
+          <div className="spinner-border text-primary mb-3" role="status">
+            <span className="visually-hidden">Loading...</span>
+          </div>
+          <p>Loading doctors and specialties...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-vh-100" style={{ background: 'linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%)' }}>
@@ -740,8 +849,8 @@ const App = () => {
                     >
                       <option value="all">All Specialties</option>
                       {specialties.map((specialty) => (
-                        <option key={specialty} value={specialty}>
-                          {specialty}
+                        <option key={specialty.id} value={specialty.name}>
+                          {specialty.name}
                         </option>
                       ))}
                     </select>
@@ -773,24 +882,66 @@ const App = () => {
             <p className="lead text-muted">
               {selectedSpecialty === 'all'
                 ? 'Choose from our panel of experienced doctors across various specialties'
-                : `Showing ${filteredDoctors.length} ${selectedSpecialty.toLowerCase()}${filteredDoctors.length !== 1 ? 's' : ''}`}
+                : `Showing ${doctors.length} ${selectedSpecialty.toLowerCase()}${doctors.length !== 1 ? 's' : ''}`}
             </p>
           </div>
 
-          <div className="doctors-grid">
-            {filteredDoctors.length > 0 ? (
-              filteredDoctors.map((doctor) => (
-                <DoctorCard key={doctor.id} doctor={doctor} />
-              ))
-            ) : (
-              <div className="no-doctors-message">
-                <div className="text-muted">
-                  <h4>No doctors found</h4>
-                  <p>Try selecting a different specialty</p>
-                </div>
+          {doctorsLoading ? (
+            <div className="text-center py-5">
+              <div className="spinner-border text-primary mb-3" role="status">
+                <span className="visually-hidden">Loading...</span>
               </div>
-            )}
-          </div>
+              <p>Loading doctors...</p>
+            </div>
+          ) : (
+            <>
+              {doctors.length > 0 ? (
+                <div className="doctors-grid">
+                  {doctors.map((doctor) => (
+                    <DoctorCard key={doctor.id} doctor={doctor} />
+                  ))}
+                </div>
+              ) : (
+                /* Simple full-width no-doctors message */
+                <div style={{ 
+                  width: '100%', 
+                  padding: '4rem 2rem',
+                  backgroundColor: 'white',
+                  borderRadius: '16px',
+                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                  margin: '2rem 0',
+                  textAlign: 'center'
+                }}>
+                  <div className="mb-3">
+                    <UserIcon size={60} />
+                  </div>
+                  <h4 className="mb-3" style={{ color: '#6c757d' }}>
+                    No {selectedSpecialty === 'all' ? 'doctors' : selectedSpecialty.toLowerCase() + 's'} available
+                  </h4>
+                  <p className="mb-4" style={{ color: '#6c757d' }}>
+                    {selectedSpecialty === 'all' 
+                      ? 'We are working to add more doctors to our platform.' 
+                      : `We currently don't have any ${selectedSpecialty.toLowerCase()}s available. Try browsing other specialties.`
+                    }
+                  </p>
+                  <div className="d-flex flex-column flex-sm-row gap-2 justify-content-center">
+                    <button 
+                      className="btn btn-teal"
+                      onClick={() => handleSpecialtyChange('all')}
+                    >
+                      Browse All Doctors
+                    </button>
+                    <button 
+                      className="btn btn-outline-teal"
+                      onClick={() => window.location.reload()}
+                    >
+                      Refresh Page
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       </section>
 
@@ -834,7 +985,7 @@ const App = () => {
         </div>
       </footer>
 
-      {/* Auth Modal */}
+      {/* Auth Modal - Keep existing auth modal code */}
       {showAuthModal && (
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-md">
@@ -857,6 +1008,7 @@ const App = () => {
                 ></button>
               </div>
               <div className="modal-body">
+                {/* Keep existing auth form code */}
                 {authStep === 'login-form' ? (
                   <form onSubmit={handleLoginSubmit}>
                     {formErrors.general && (
@@ -1139,7 +1291,6 @@ const App = () => {
                       <button 
                         className="btn btn-link p-0 text-decoration-none ms-1"
                         onClick={() => {
-                          // In real app, resend OTP
                           alert('OTP resent! (Demo: still use 111)');
                         }}
                       >
@@ -1169,15 +1320,20 @@ const App = () => {
               </div>
               <div className="modal-body">
                 {(() => {
-                  const doctor = allDoctors.find(d => d.id === showDoctorModal);
+                  const doctor = doctors.find(d => d.id === showDoctorModal);
                   return doctor ? (
                     <div className="row">
                       <div className="col-md-4 text-center mb-4">
                         <div className="doctor-image bg-light rounded d-flex align-items-center justify-content-center mx-auto" style={{ width: '150px', height: '150px' }}>
                           <UserIcon size={60} />
                         </div>
-                        <h4 className="mt-3 mb-1">{doctor.name}</h4>
-                        <p className="text-muted">{doctor.specialty}</p>
+                        <h4 className="mt-3 mb-1">Dr. {doctor.first_name} {doctor.last_name}</h4>
+                        <p className="text-muted">
+                          {doctor.specialties && doctor.specialties.length > 0 
+                            ? doctor.specialties.map(s => s.name).join(', ')
+                            : 'General Practitioner'
+                          }
+                        </p>
                       </div>
                       <div className="col-md-8">
                         <div className="mb-3">
@@ -1186,11 +1342,20 @@ const App = () => {
                         </div>
                         <div className="mb-3">
                           <h6 className="fw-bold">Experience</h6>
-                          <p>{doctor.experience}</p>
+                          <p>{doctor.years_of_experience}+ Years</p>
+                        </div>
+                        <div className="mb-3">
+                          <h6 className="fw-bold">Languages</h6>
+                          <p>
+                            {doctor.languages && doctor.languages.length > 0 
+                              ? doctor.languages.map(l => l.name).join(', ')
+                              : 'English'
+                            }
+                          </p>
                         </div>
                         <div className="mb-3">
                           <h6 className="fw-bold">Location</h6>
-                          <p><MapPinIcon /> {doctor.location}</p>
+                          <p><MapPinIcon /> Apollo Hospital</p>
                         </div>
                         <div className="mb-3">
                           <h6 className="fw-bold">About</h6>
