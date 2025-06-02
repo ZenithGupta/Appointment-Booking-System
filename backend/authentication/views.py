@@ -6,6 +6,8 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
+from django.core.exceptions import ValidationError
 from datetime import datetime, timedelta
 
 from .models import (
@@ -177,31 +179,52 @@ class DoctorScheduleViewSet(viewsets.ModelViewSet):
         else:
             permission_classes = [IsAuthenticated]  # Must be logged in to create/edit/delete
         return [permission() for permission in permission_classes]
+    
+    def perform_create(self, serializer):
+        """Add extra validation when creating schedules"""
+        try:
+            serializer.save()
+        except ValidationError as e:
+            from rest_framework import serializers as drf_serializers
+            raise drf_serializers.ValidationError(e.message_dict)
 
 class AvailableSlotsView(APIView):
     permission_classes = [AllowAny]
     
     def get(self, request, doctor_id):
-        # Get today's date
-        today = datetime.now().date()
-        # Get end date (30 days from now by default)
         try:
             doctor = Doctor.objects.get(id=doctor_id)
         except Doctor.DoesNotExist:
             return Response({'error': 'Doctor not found'}, status=status.HTTP_404_NOT_FOUND)
         
+        # Get today's date and future dates only
+        today = timezone.now().date()
         end_date = today + timedelta(days=30)
         
-        # Get available schedules
+        # Filter out past schedules and get only future/today's schedules
         available_slots = DoctorSchedule.objects.filter(
             doctor=doctor,
-            date__gte=today,
+            date__gte=today,  # Only today and future dates
             date__lte=end_date,
             is_active=True,
             available_slots__gt=0
         ).order_by('date', 'start_time')
         
-        serializer = DoctorScheduleSerializer(available_slots, many=True)
+        # For today's schedules, also filter by time
+        current_time = timezone.now().time()
+        filtered_slots = []
+        
+        for schedule in available_slots:
+            if schedule.date == today:
+                # For today, only include schedules that start in the future (with buffer)
+                buffer_time = (timezone.now() + timedelta(minutes=30)).time()
+                if schedule.start_time > buffer_time:
+                    filtered_slots.append(schedule)
+            else:
+                # For future dates, include all schedules
+                filtered_slots.append(schedule)
+        
+        serializer = DoctorScheduleSerializer(filtered_slots, many=True)
         return Response(serializer.data)
 
 class AvailableTimeSlotsView(APIView):
@@ -295,6 +318,20 @@ class BookAppointmentView(APIView):
                 'message': 'Schedule not found'
             }, status=status.HTTP_404_NOT_FOUND)
         
+        # Validate schedule is not in the past
+        now = timezone.now()
+        if schedule.date < now.date():
+            return Response({
+                'message': 'Cannot book appointments for past dates'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if schedule.date == now.date():
+            buffer_time = (now + timedelta(minutes=30)).time()
+            if schedule.start_time <= buffer_time:
+                return Response({
+                    'message': 'Cannot book appointments less than 30 minutes in advance'
+                }, status=status.HTTP_400_BAD_REQUEST)
+        
         # Check if there are available slots
         if schedule.available_slots <= 0:
             return Response({
@@ -324,6 +361,15 @@ class BookAppointmentView(APIView):
                     schedule=schedule,
                     is_booked=False
                 )
+                
+                # Additional validation for past time slots
+                if schedule.date == now.date():
+                    buffer_time = (now + timedelta(minutes=15)).time()
+                    if time_slot.start_time <= buffer_time:
+                        return Response({
+                            'message': 'This time slot is no longer available'
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                
                 time_slot.is_booked = True
                 time_slot.save()
                 
@@ -338,26 +384,45 @@ class BookAppointmentView(APIView):
             # For range-based appointments
             appointment_start_time = data.get('start_time')
             appointment_end_time = data.get('end_time')
+            
+            # Validate appointment time is not in the past
+            if schedule.date == now.date():
+                buffer_time = (now + timedelta(minutes=15)).time()
+                if appointment_start_time <= buffer_time:
+                    return Response({
+                        'message': 'Appointment time must be at least 15 minutes in the future'
+                    }, status=status.HTTP_400_BAD_REQUEST)
         
         # Create appointment
-        appointment = Appointment.objects.create(
-            patient=patient,
-            doctor_id=doctor_id,
-            schedule=schedule,
-            time_slot=time_slot,
-            appointment_start_time=appointment_start_time,
-            appointment_end_time=appointment_end_time,
-            notes=data.get('notes', '')
-        )
-        
-        # Reduce available slots
-        schedule.available_slots -= 1
-        schedule.save()
-        
-        return Response({
-            'message': 'Appointment booked successfully',
-            'appointment': AppointmentSerializer(appointment).data
-        }, status=status.HTTP_201_CREATED)
+        try:
+            appointment = Appointment.objects.create(
+                patient=patient,
+                doctor_id=doctor_id,
+                schedule=schedule,
+                time_slot=time_slot,
+                appointment_start_time=appointment_start_time,
+                appointment_end_time=appointment_end_time,
+                notes=data.get('notes', '')
+            )
+            
+            # Reduce available slots
+            schedule.available_slots -= 1
+            schedule.save()
+            
+            return Response({
+                'message': 'Appointment booked successfully',
+                'appointment': AppointmentSerializer(appointment).data
+            }, status=status.HTTP_201_CREATED)
+            
+        except ValidationError as e:
+            # If appointment creation fails due to validation, restore the time slot
+            if time_slot:
+                time_slot.is_booked = False
+                time_slot.save()
+            
+            return Response({
+                'message': str(e)
+            }, status=status.HTTP_400_BAD_REQUEST)
 
 class CancelAppointmentView(APIView):
     permission_classes = [IsAuthenticated]

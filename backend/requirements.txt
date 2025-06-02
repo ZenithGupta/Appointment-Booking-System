@@ -30,3 +30,5 @@ tzdata==2025.2
 # Build Tools
 setuptools==78.1.1
 wheel==0.45.1
+
+django-crontab==0.7.1

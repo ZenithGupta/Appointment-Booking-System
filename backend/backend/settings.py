@@ -46,7 +46,8 @@ INSTALLED_APPS = [
     # 'doctor',
     # 'patient',
     'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist'
+    'rest_framework_simplejwt.token_blacklist',
+    'django_crontab',
 ]
 
 MIDDLEWARE = [
@@ -187,3 +188,12 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+# Cron Jobs Configuration
+CRONJOBS = [
+    # Run cleanup every hour
+    ('0 * * * *', 'django.core.management.call_command', ['cleanup_past_appointments']),
+]
+
+# Optional: Add logging for cron jobs
+CRONTAB_COMMAND_SUFFIX = '2>&1'

@@ -1,6 +1,8 @@
 from django.db import models
 from django.conf import settings
-from datetime import datetime, timedelta
+from django.core.exceptions import ValidationError
+from django.utils import timezone
+from datetime import datetime, timedelta, time
 
 # Doctor related models
 class Specialty(models.Model):
@@ -82,14 +84,45 @@ class DoctorSchedule(models.Model):
         unique_together = ['doctor', 'date', 'start_time', 'end_time']
         ordering = ['date', 'start_time']
     
-    def __str__(self):
-        return f"{self.doctor} - {self.date} ({self.get_time_range_display()})"
+    def clean(self):
+        """Validate that schedule is not in the past"""
+        super().clean()
+        
+        if self.date and self.start_time:
+            # Get current date and time
+            now = timezone.now()
+            current_date = now.date()
+            current_time = now.time()
+            
+            # Check if date is in the past
+            if self.date < current_date:
+                raise ValidationError({
+                    'date': 'Schedule date cannot be in the past.'
+                })
+            
+            # If it's today, check if start time is in the past (with 30 min buffer)
+            if self.date == current_date:
+                # Add 30 minutes buffer to current time
+                buffer_time = (now + timedelta(minutes=30)).time()
+                if self.start_time <= buffer_time:
+                    raise ValidationError({
+                        'start_time': f'Schedule time must be at least 30 minutes in the future. Current time: {current_time.strftime("%H:%M")}'
+                    })
+        
+        # Validate end time is after start time
+        if self.start_time and self.end_time:
+            if self.end_time <= self.start_time:
+                raise ValidationError({
+                    'end_time': 'End time must be after start time.'
+                })
     
     def save(self, *args, **kwargs):
+        # Run validation before saving
+        self.full_clean()
+        
         # Auto-calculate available slots for slot-based schedules
         if self.time_range == 'slot-based':
             self.available_slots = self.calculate_total_slots()
-        # For range-based, admin sets available_slots manually
         
         is_new = not self.pk
         super().save(*args, **kwargs)
@@ -97,6 +130,9 @@ class DoctorSchedule(models.Model):
         # Generate TimeSlots for slot-based schedules
         if is_new and self.time_range == 'slot-based':
             self.generate_time_slots()
+    
+    def __str__(self):
+        return f"{self.doctor} - {self.date} ({self.get_time_range_display()})"
     
     def calculate_total_slots(self):
         """Calculate total number of slots for slot-based scheduling"""
@@ -130,7 +166,6 @@ class DoctorSchedule(models.Model):
         if self.time_range == 'slot-based':
             return self.time_slots.filter(is_booked=False).order_by('start_time')
         else:
-            # For range-based, return the overall time range
             return {
                 'start_time': self.start_time,
                 'end_time': self.end_time,
@@ -147,6 +182,27 @@ class TimeSlot(models.Model):
     class Meta:
         unique_together = ['schedule', 'start_time', 'end_time']
         ordering = ['start_time']
+    
+    def clean(self):
+        """Validate that time slot is not in the past"""
+        super().clean()
+        
+        if self.schedule and self.schedule.date and self.start_time:
+            now = timezone.now()
+            current_date = now.date()
+            current_time = now.time()
+            
+            # If it's today, check if start time is in the past
+            if self.schedule.date == current_date:
+                buffer_time = (now + timedelta(minutes=30)).time()
+                if self.start_time <= buffer_time:
+                    raise ValidationError({
+                        'start_time': 'Time slot cannot be in the past or too close to current time.'
+                    })
+    
+    def save(self, *args, **kwargs):
+        self.full_clean()
+        super().save(*args, **kwargs)
     
     def __str__(self):
         return f"{self.schedule.doctor} - {self.schedule.date} ({self.start_time} to {self.end_time})"
@@ -201,13 +257,42 @@ class Appointment(models.Model):
     notes = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
-    def __str__(self):
-        return f"{self.patient} with {self.doctor} on {self.schedule.date} at {self.appointment_start_time}"
+    class Meta:
+        ordering = ['schedule__date', 'appointment_start_time']
+    
+    def clean(self):
+        """Validate that appointment is not in the past"""
+        super().clean()
+        
+        if self.schedule and self.schedule.date and self.appointment_start_time:
+            now = timezone.now()
+            current_date = now.date()
+            current_time = now.time()
+            
+            # Check if appointment date is in the past
+            if self.schedule.date < current_date:
+                raise ValidationError({
+                    'schedule': 'Appointment date cannot be in the past.'
+                })
+            
+            # If it's today, check if appointment time is in the past
+            if self.schedule.date == current_date:
+                buffer_time = (now + timedelta(minutes=15)).time()
+                if self.appointment_start_time <= buffer_time:
+                    raise ValidationError({
+                        'appointment_start_time': 'Appointment time must be at least 15 minutes in the future.'
+                    })
     
     def save(self, *args, **kwargs):
+        # Run validation before saving
+        self.full_clean()
+        
         # For slot-based appointments, ensure time_slot is provided
         if self.schedule.time_range == 'slot-based' and self.time_slot:
             self.appointment_start_time = self.time_slot.start_time
             self.appointment_end_time = self.time_slot.end_time
         
         super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return f"{self.patient} with {self.doctor} on {self.schedule.date} at {self.appointment_start_time}"
