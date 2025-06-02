@@ -1,9 +1,9 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
 import { authAPI, doctorsAPI, specialtiesAPI, appointmentsAPI } from './api';
 
-// Simple Icon Components (keep the same)
+// Simple Icon Components (moved outside for better performance)
 const CalendarIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
@@ -51,6 +51,211 @@ const FilterIcon = () => (
     <polygon points="22,3 2,3 10,12.46 10,19 14,21 14,12.46"></polygon>
   </svg>
 );
+
+// OPTIMIZED: DoctorCard component moved outside and memoized
+const DoctorCard = React.memo(({ 
+  doctor, 
+  isExpanded, 
+  selectedDate, 
+  selectedTimeSlot,
+  currentDateIndex, 
+  dates,
+  isLoggedIn,
+  isLoading,
+  doctorSlots,
+  onBookAppointment,
+  onShowDetails,
+  onDateSelect,
+  onTimeSlotSelect,
+  onPrevDates,
+  onNextDates,
+  onConfirmAppointment,
+  onCancel,
+  getTimeSlotsForDate
+}) => {
+  return (
+    <div className="doctor-card-wrapper">
+      <div className="card doctor-card h-100 shadow-sm position-relative">
+        <button 
+          className="btn btn-sm btn-light info-btn position-absolute"
+          onClick={() => onShowDetails(doctor.id)}
+          title="View Full Details"
+        >
+          <span style={{ fontSize: '14px', fontWeight: 'bold' }}>i</span>
+        </button>
+        
+        <div className="card-body p-4">
+          <div className="row g-3">
+            <div className="col-auto">
+              <div className="doctor-image bg-light rounded d-flex align-items-center justify-content-center">
+                <UserIcon size={40} />
+              </div>
+            </div>
+            
+            <div className="col">
+              <h5 className="card-title mb-1 fw-bold">Dr. {doctor.first_name} {doctor.last_name}</h5>
+              <p className="text-muted mb-1">
+                {doctor.specialties && doctor.specialties.length > 0 
+                  ? doctor.specialties.map(s => s.name).join(', ')
+                  : 'General Practitioner'
+                }
+              </p>
+              <p className="small text-secondary mb-2">{doctor.degree}</p>
+              <p className="small fw-medium mb-2 text-success">{doctor.years_of_experience}+ Years Experience</p>
+              
+              <div className="d-flex align-items-center gap-3 mb-3">
+                <div className="d-flex align-items-center gap-1 text-muted">
+                  <MapPinIcon />
+                  <span className="small">Apollo Hospital</span>
+                </div>
+              </div>
+              
+              <p className="small text-muted mb-3 bio-text">{doctor.bio}</p>
+              
+              <button
+                onClick={() => onBookAppointment(doctor.id)}
+                className={`btn fw-medium ${isExpanded ? 'btn-lime' : 'btn-teal'}`}
+              >
+                {isExpanded ? 'Select Date & Time' : 'Book Appointment'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Appointment Booking Slider */}
+        {isExpanded && (
+          <div className="appointment-slider border-top bg-light p-4">
+            <div className="mb-4">
+              <h6 className="fw-semibold mb-3 d-flex align-items-center gap-2 text-teal">
+                <CalendarIcon />
+                Select Date
+              </h6>
+              
+              <div className="d-flex justify-content-between align-items-center mb-3">
+                <button
+                  onClick={onPrevDates}
+                  disabled={currentDateIndex === 0}
+                  className="btn btn-sm btn-outline-secondary rounded-circle p-2"
+                  style={{ width: '40px', height: '40px' }}
+                >
+                  <ChevronLeftIcon />
+                </button>
+                
+                <button
+                  onClick={onNextDates}
+                  disabled={currentDateIndex >= dates.length - 7}
+                  className="btn btn-sm btn-outline-secondary rounded-circle p-2"
+                  style={{ width: '40px', height: '40px' }}
+                >
+                  <ChevronRightIcon />
+                </button>
+              </div>
+              
+              <div className="row g-2">
+                {dates.slice(currentDateIndex, currentDateIndex + 7).map((dateObj, index) => {
+                  // Check if doctor has slots for this date
+                  const hasSlots = doctorSlots.some(schedule => schedule.date === dateObj.fullDate);
+                  
+                  return (
+                    <div key={`${dateObj.fullDate}-${index}`} className="col">
+                      <button
+                        onClick={() => hasSlots ? onDateSelect(dateObj) : null}
+                        disabled={!hasSlots}
+                        className={`btn w-100 text-center date-btn ${
+                          selectedDate?.fullDate === dateObj.fullDate ? 'btn-lime' : 
+                          hasSlots ? 'btn-outline-secondary' : 'btn-outline-secondary opacity-50'
+                        } ${dateObj.isToday ? 'border-teal border-2' : ''}`}
+                      >
+                        <div className="small fw-medium">{dateObj.day}</div>
+                        <div className="h6 mb-0">{dateObj.date}</div>
+                        <div className="small">{dateObj.month}</div>
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {selectedDate && (
+              <div className="time-section">
+                <h6 className="fw-semibold mb-3 d-flex align-items-center gap-2 text-teal">
+                  <ClockIcon />
+                  Available Time Slots
+                </h6>
+                
+                {(() => {
+                  const timeSlots = getTimeSlotsForDate(doctor.id, selectedDate);
+                  const isToday = selectedDate.fullDate === new Date().toISOString().split('T')[0];
+                  
+                  if (timeSlots.length === 0) {
+                    return (
+                      <div className="text-center text-muted py-3">
+                        <p>
+                          {isToday 
+                            ? "No more time slots available for today. Please select a future date."
+                            : "No available time slots for this date"
+                          }
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="row g-2 mb-4">
+                      {timeSlots.map((slot, index) => (
+                        <div key={index} className="col-6 col-md-4 col-lg-3">
+                          <button 
+                            onClick={() => onTimeSlotSelect(slot)}
+                            className={`btn w-100 time-slot ${
+                              selectedTimeSlot?.id === slot.id ? 'btn-lime' : 'btn-outline-teal'
+                            }`}
+                          >
+                            {slot.formatted_time}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+                
+                <div className="d-flex gap-2">
+                  <button 
+                    className="btn btn-lime flex-fill fw-medium"
+                    onClick={onConfirmAppointment}
+                    disabled={!selectedTimeSlot || isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                        Booking...
+                      </>
+                    ) : !isLoggedIn ? (
+                      'Login to Confirm Appointment'
+                    ) : (
+                      'Confirm Appointment'
+                    )}
+                  </button>
+                  <button
+                    onClick={onCancel}
+                    className="btn btn-outline-teal"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                
+                {!isLoggedIn && (
+                  <p className="small text-muted text-center mt-2 mb-0">
+                    Please login to confirm your appointment booking
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
 
 const App = () => {
   // State for real data
@@ -111,7 +316,26 @@ const App = () => {
     loadDoctors();
   }, [selectedSpecialty]);
 
-  const loadInitialData = async () => {
+  // OPTIMIZED: Memoize dates generation
+  const dates = useMemo(() => {
+    const dateArray = [];
+    const today = new Date();
+    for (let i = 0; i < 30; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      dateArray.push({
+        date: date.getDate(),
+        day: date.toLocaleDateString('en-US', { weekday: 'short' }),
+        month: date.toLocaleDateString('en-US', { month: 'short' }),
+        fullDate: date.toISOString().split('T')[0],
+        isToday: i === 0
+      });
+    }
+    return dateArray;
+  }, []);
+
+  // OPTIMIZED: Use useCallback for API functions
+  const loadInitialData = useCallback(async () => {
     setLoading(true);
     try {
       // Load specialties
@@ -127,9 +351,9 @@ const App = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const loadDoctors = async () => {
+  const loadDoctors = useCallback(async () => {
     setDoctorsLoading(true);
     try {
       let doctorsResult;
@@ -153,9 +377,9 @@ const App = () => {
     } finally {
       setDoctorsLoading(false);
     }
-  };
+  }, [selectedSpecialty, specialties]);
 
-  const loadAvailableSlots = async (doctorId) => {
+  const loadAvailableSlots = useCallback(async (doctorId) => {
     try {
       const slotsResult = await doctorsAPI.getAvailableSlots(doctorId);
       if (slotsResult.success) {
@@ -167,57 +391,38 @@ const App = () => {
     } catch (error) {
       console.error('Error loading available slots:', error);
     }
-  };
+  }, []);
 
-  // Generate dates for the next 30 days
-  const generateDates = () => {
-    const dates = [];
-    const today = new Date();
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
-      dates.push({
-        date: date.getDate(),
-        day: date.toLocaleDateString('en-US', { weekday: 'short' }),
-        month: date.toLocaleDateString('en-US', { month: 'short' }),
-        fullDate: date.toISOString().split('T')[0],
-        isToday: i === 0
-      });
-    }
-    return dates;
-  };
-
-  const dates = generateDates();
-
-  const nextDates = () => {
+  // OPTIMIZED: Use useCallback for event handlers
+  const handleNextDates = useCallback(() => {
     if (currentDateIndex < dates.length - 7) {
       setCurrentDateIndex(currentDateIndex + 1);
     }
-  };
+  }, [currentDateIndex, dates.length]);
 
-  const prevDates = () => {
+  const handlePrevDates = useCallback(() => {
     if (currentDateIndex > 0) {
       setCurrentDateIndex(currentDateIndex - 1);
     }
-  };
+  }, [currentDateIndex]);
 
-  const handleLogin = () => {
+  const handleLogin = useCallback(() => {
     setAuthMode('login');
     setShowAuthModal(true);
     setShowAuthDropdown(false);
     setAuthStep('login-form');
     setFormErrors({});
-  };
+  }, []);
 
-  const handleRegister = () => {
+  const handleRegister = useCallback(() => {
     setAuthMode('register');
     setShowAuthModal(true);
     setShowAuthDropdown(false);
     setAuthStep('mobile');
     setFormErrors({});
-  };
+  }, []);
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     setIsLoading(true);
     await authAPI.logout();
     setIsLoggedIn(false);
@@ -234,9 +439,153 @@ const App = () => {
       dateOfBirth: ''
     });
     setIsLoading(false);
-  };
+  }, []);
 
-  // Auth form validation (keep existing validation functions)
+  const handleShowDoctorDetails = useCallback((doctorId) => {
+    setShowDoctorModal(doctorId);
+  }, []);
+
+  const handleBookAppointment = useCallback(async (doctorId) => {
+    if (selectedDoctor === doctorId) {
+      setSelectedDoctor(null);
+      setSelectedDate(null);
+      setSelectedTimeSlot(null);
+      setCurrentDateIndex(0);
+    } else {
+      setSelectedDoctor(doctorId);
+      setSelectedDate(null);
+      setSelectedTimeSlot(null);
+      setCurrentDateIndex(0);
+      
+      // Load available slots for this doctor
+      await loadAvailableSlots(doctorId);
+    }
+  }, [selectedDoctor, loadAvailableSlots]);
+
+  // Separate function for modal book appointment - always opens, never toggles
+  const handleBookAppointmentFromModal = useCallback(async (doctorId) => {
+    // Always open the appointment booking (don't toggle)
+    setSelectedDoctor(doctorId);
+    setSelectedDate(null);
+    setSelectedTimeSlot(null);
+    setCurrentDateIndex(0);
+    
+    // Load available slots for this doctor if not already loaded
+    if (!availableSlots[doctorId]) {
+      await loadAvailableSlots(doctorId);
+    }
+  }, [availableSlots, loadAvailableSlots]);
+
+  const handleDateSelect = useCallback((date) => {
+    setSelectedDate(date);
+    setSelectedTimeSlot(null);
+  }, []);
+
+  const handleTimeSlotSelect = useCallback((slot) => {
+    setSelectedTimeSlot(slot);
+  }, []);
+
+  const handleSpecialtyChange = useCallback((specialty) => {
+    setSelectedSpecialty(specialty);
+    setSelectedDoctor(null);
+    setSelectedDate(null);
+    setSelectedTimeSlot(null);
+    setCurrentDateIndex(0);
+  }, []);
+
+  const handleConfirmAppointment = useCallback(async () => {
+    if (!isLoggedIn) {
+      handleLogin();
+      return;
+    }
+
+    if (!selectedDoctor || !selectedDate || !selectedTimeSlot) {
+      alert('Please select a doctor, date, and time slot');
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const appointmentData = {
+        schedule_id: selectedTimeSlot.schedule_id,
+        time_slot_id: selectedTimeSlot.id,
+        notes: 'Appointment booked through website'
+      };
+
+      const result = await appointmentsAPI.book(selectedDoctor, appointmentData);
+      
+      if (result.success) {
+        alert('Appointment booked successfully!');
+        setSelectedDoctor(null);
+        setSelectedDate(null);
+        setSelectedTimeSlot(null);
+        // Reload available slots
+        await loadAvailableSlots(selectedDoctor);
+      } else {
+        alert('Failed to book appointment: ' + result.error);
+      }
+    } catch (error) {
+      alert('Error booking appointment. Please try again.');
+      console.error('Booking error:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isLoggedIn, selectedDoctor, selectedDate, selectedTimeSlot, handleLogin, loadAvailableSlots]);
+
+  const handleCancelAppointment = useCallback(() => {
+    setSelectedDoctor(null);
+    setSelectedDate(null);
+    setSelectedTimeSlot(null);
+  }, []);
+
+  // OPTIMIZED: Memoize time slots function with past time filtering
+  const getTimeSlotsForDate = useCallback((doctorId, selectedDate) => {
+    if (!selectedDate || !availableSlots[doctorId]) {
+      return [];
+    }
+
+    const slotsForDate = availableSlots[doctorId].filter(schedule => 
+      schedule.date === selectedDate.fullDate
+    );
+
+    const timeSlots = [];
+    const now = new Date();
+    const today = now.toISOString().split('T')[0];
+    const currentTime = now.getHours() * 60 + now.getMinutes(); // Current time in minutes since midnight
+    
+    slotsForDate.forEach(schedule => {
+      if (schedule.available_time_slots && Array.isArray(schedule.available_time_slots)) {
+        schedule.available_time_slots.forEach(slot => {
+          // Parse slot start time (format: "HH:MM" or "HH:MM:SS")
+          const slotStartTime = slot.start_time;
+          let slotMinutes = 0;
+          
+          if (slotStartTime) {
+            const timeParts = slotStartTime.split(':');
+            const hours = parseInt(timeParts[0], 10);
+            const minutes = parseInt(timeParts[1], 10);
+            slotMinutes = hours * 60 + minutes;
+          }
+          
+          // If it's today, only show slots that are in the future (at least 30 minutes from now)
+          const isToday = selectedDate.fullDate === today;
+          const isInFuture = !isToday || (slotMinutes > currentTime + 30);
+          
+          if (isInFuture) {
+            timeSlots.push({
+              ...slot,
+              schedule_id: schedule.id,
+              formatted_time: slot.formatted_time || `${slot.start_time} - ${slot.end_time}`
+            });
+          }
+        });
+      }
+    });
+
+    return timeSlots;
+  }, [availableSlots]);
+
+  // Auth form validation functions (keep existing)
   const validateMobile = () => {
     const errors = {};
     if (!userFormData.mobileNumber.trim()) {
@@ -281,8 +630,8 @@ const App = () => {
     return errors;
   };
 
-  // Auth form handlers (keep existing handlers)
-  const handleMobileSubmit = async (e) => {
+  // OPTIMIZED: Use useCallback for form handlers
+  const handleMobileSubmit = useCallback(async (e) => {
     e.preventDefault();
     const errors = validateMobile();
     
@@ -298,9 +647,9 @@ const App = () => {
       setAuthStep('otp');
       setIsLoading(false);
     }, 1000);
-  };
+  }, [userFormData.mobileNumber]);
 
-  const handleLoginSubmit = async (e) => {
+  const handleLoginSubmit = useCallback(async (e) => {
     e.preventDefault();
     
     const errors = validateLogin();
@@ -342,9 +691,9 @@ const App = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userFormData]);
 
-  const handleOtpSubmit = (e) => {
+  const handleOtpSubmit = useCallback((e) => {
     e.preventDefault();
     
     if (userFormData.otp === '111') {
@@ -353,9 +702,9 @@ const App = () => {
     } else {
       setFormErrors({ otp: 'Invalid OTP. Please enter 111' });
     }
-  };
+  }, [userFormData.otp]);
 
-  const handleProfileSubmit = async (e) => {
+  const handleProfileSubmit = useCallback(async (e) => {
     e.preventDefault();
     const errors = validateProfile();
     
@@ -396,9 +745,9 @@ const App = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [userFormData]);
 
-  const handleInputChange = (field, value) => {
+  const handleInputChange = useCallback((field, value) => {
     setUserFormData(prev => ({
       ...prev,
       [field]: value
@@ -410,9 +759,9 @@ const App = () => {
         [field]: ''
       }));
     }
-  };
+  }, [formErrors]);
 
-  const closeAuthModal = () => {
+  const closeAuthModal = useCallback(() => {
     setShowAuthModal(false);
     setAuthStep('mobile');
     setFormErrors({});
@@ -424,297 +773,7 @@ const App = () => {
       password: '',
       dateOfBirth: ''
     });
-  };
-
-  const handleShowDoctorDetails = (doctorId) => {
-    setShowDoctorModal(doctorId);
-  };
-
-  const handleBookAppointment = async (doctorId) => {
-    if (selectedDoctor === doctorId) {
-      setSelectedDoctor(null);
-      setSelectedDate(null);
-      setSelectedTimeSlot(null);
-      setCurrentDateIndex(0);
-    } else {
-      setSelectedDoctor(doctorId);
-      setSelectedDate(null);
-      setSelectedTimeSlot(null);
-      setCurrentDateIndex(0);
-      
-      // Load available slots for this doctor
-      await loadAvailableSlots(doctorId);
-    }
-  };
-
-  const handleDateSelect = (date) => {
-    setSelectedDate(date);
-    setSelectedTimeSlot(null);
-  };
-
-  const handleTimeSlotSelect = (slot) => {
-    setSelectedTimeSlot(slot);
-  };
-
-  const handleSpecialtyChange = (specialty) => {
-    setSelectedSpecialty(specialty);
-    setSelectedDoctor(null);
-    setSelectedDate(null);
-    setSelectedTimeSlot(null);
-    setCurrentDateIndex(0);
-  };
-
-  const handleConfirmAppointment = async () => {
-    if (!isLoggedIn) {
-      handleLogin();
-      return;
-    }
-
-    if (!selectedDoctor || !selectedDate || !selectedTimeSlot) {
-      alert('Please select a doctor, date, and time slot');
-      return;
-    }
-
-    setIsLoading(true);
-    try {
-      const appointmentData = {
-        schedule_id: selectedTimeSlot.schedule_id,
-        time_slot_id: selectedTimeSlot.id,
-        notes: 'Appointment booked through website'
-      };
-
-      const result = await appointmentsAPI.book(selectedDoctor, appointmentData);
-      
-      if (result.success) {
-        alert('Appointment booked successfully!');
-        setSelectedDoctor(null);
-        setSelectedDate(null);
-        setSelectedTimeSlot(null);
-        // Reload available slots
-        await loadAvailableSlots(selectedDoctor);
-      } else {
-        alert('Failed to book appointment: ' + result.error);
-      }
-    } catch (error) {
-      alert('Error booking appointment. Please try again.');
-      console.error('Booking error:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Get available time slots for selected date
-  const getTimeSlotsForDate = (doctorId, selectedDate) => {
-    if (!selectedDate || !availableSlots[doctorId]) {
-      return [];
-    }
-
-    const slotsForDate = availableSlots[doctorId].filter(schedule => 
-      schedule.date === selectedDate.fullDate
-    );
-
-    const timeSlots = [];
-    slotsForDate.forEach(schedule => {
-      if (schedule.available_time_slots && Array.isArray(schedule.available_time_slots)) {
-        schedule.available_time_slots.forEach(slot => {
-          timeSlots.push({
-            ...slot,
-            schedule_id: schedule.id,
-            formatted_time: slot.formatted_time || `${slot.start_time} - ${slot.end_time}`
-          });
-        });
-      }
-    });
-
-    return timeSlots;
-  };
-
-  const DoctorCard = ({ doctor }) => {
-    const isExpanded = selectedDoctor === doctor.id;
-    const doctorSlots = availableSlots[doctor.id] || [];
-
-    return (
-      <div className="doctor-card-wrapper">
-        <div className="card doctor-card h-100 shadow-sm position-relative">
-          <button 
-            className="btn btn-sm btn-light info-btn position-absolute"
-            onClick={() => handleShowDoctorDetails(doctor.id)}
-            title="View Full Details"
-          >
-            <span style={{ fontSize: '14px', fontWeight: 'bold' }}>i</span>
-          </button>
-          
-          <div className="card-body p-4">
-            <div className="row g-3">
-              <div className="col-auto">
-                <div className="doctor-image bg-light rounded d-flex align-items-center justify-content-center">
-                  <UserIcon size={40} />
-                </div>
-              </div>
-              
-              <div className="col">
-                <h5 className="card-title mb-1 fw-bold">Dr. {doctor.first_name} {doctor.last_name}</h5>
-                <p className="text-muted mb-1">
-                  {doctor.specialties && doctor.specialties.length > 0 
-                    ? doctor.specialties.map(s => s.name).join(', ')
-                    : 'General Practitioner'
-                  }
-                </p>
-                <p className="small text-secondary mb-2">{doctor.degree}</p>
-                <p className="small fw-medium mb-2 text-success">{doctor.years_of_experience}+ Years Experience</p>
-                
-                <div className="d-flex align-items-center gap-3 mb-3">
-                  <div className="d-flex align-items-center gap-1 text-muted">
-                    <MapPinIcon />
-                    <span className="small">Apollo Hospital</span>
-                  </div>
-                </div>
-                
-                <p className="small text-muted mb-3 bio-text">{doctor.bio}</p>
-                
-                <button
-                  onClick={() => handleBookAppointment(doctor.id)}
-                  className={`btn fw-medium ${isExpanded ? 'btn-lime' : 'btn-teal'}`}
-                  disabled={doctorsLoading}
-                >
-                  {isExpanded ? 'Select Date & Time' : 'Book Appointment'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Appointment Booking Slider */}
-          {isExpanded && (
-            <div className="appointment-slider border-top bg-light p-4">
-              <div className="mb-4">
-                <h6 className="fw-semibold mb-3 d-flex align-items-center gap-2 text-teal">
-                  <CalendarIcon />
-                  Select Date
-                </h6>
-                
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <button
-                    onClick={prevDates}
-                    disabled={currentDateIndex === 0}
-                    className="btn btn-sm btn-outline-secondary rounded-circle p-2"
-                    style={{ width: '40px', height: '40px' }}
-                  >
-                    <ChevronLeftIcon />
-                  </button>
-                  
-                  <button
-                    onClick={nextDates}
-                    disabled={currentDateIndex >= dates.length - 7}
-                    className="btn btn-sm btn-outline-secondary rounded-circle p-2"
-                    style={{ width: '40px', height: '40px' }}
-                  >
-                    <ChevronRightIcon />
-                  </button>
-                </div>
-                
-                <div className="row g-2">
-                  {dates.slice(currentDateIndex, currentDateIndex + 7).map((dateObj, index) => {
-                    // Check if doctor has slots for this date
-                    const hasSlots = doctorSlots.some(schedule => schedule.date === dateObj.fullDate);
-                    
-                    return (
-                      <div key={`${dateObj.fullDate}-${index}`} className="col">
-                        <button
-                          onClick={() => hasSlots ? handleDateSelect(dateObj) : null}
-                          disabled={!hasSlots}
-                          className={`btn w-100 text-center date-btn ${
-                            selectedDate?.fullDate === dateObj.fullDate ? 'btn-lime' : 
-                            hasSlots ? 'btn-outline-secondary' : 'btn-outline-secondary opacity-50'
-                          } ${dateObj.isToday ? 'border-teal border-2' : ''}`}
-                        >
-                          <div className="small fw-medium">{dateObj.day}</div>
-                          <div className="h6 mb-0">{dateObj.date}</div>
-                          <div className="small">{dateObj.month}</div>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {selectedDate && (
-                <div className="time-section">
-                  <h6 className="fw-semibold mb-3 d-flex align-items-center gap-2 text-teal">
-                    <ClockIcon />
-                    Available Time Slots
-                  </h6>
-                  
-                  {(() => {
-                    const timeSlots = getTimeSlotsForDate(doctor.id, selectedDate);
-                    
-                    if (timeSlots.length === 0) {
-                      return (
-                        <div className="text-center text-muted py-3">
-                          <p>No available time slots for this date</p>
-                        </div>
-                      );
-                    }
-
-                    return (
-                      <div className="row g-2 mb-4">
-                        {timeSlots.map((slot, index) => (
-                          <div key={index} className="col-6 col-md-4 col-lg-3">
-                            <button 
-                              onClick={() => handleTimeSlotSelect(slot)}
-                              className={`btn w-100 time-slot ${
-                                selectedTimeSlot?.id === slot.id ? 'btn-lime' : 'btn-outline-teal'
-                              }`}
-                            >
-                              {slot.formatted_time}
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                  
-                  <div className="d-flex gap-2">
-                    <button 
-                      className="btn btn-lime flex-fill fw-medium"
-                      onClick={handleConfirmAppointment}
-                      disabled={!selectedTimeSlot || isLoading}
-                    >
-                      {isLoading ? (
-                        <>
-                          <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                          Booking...
-                        </>
-                      ) : !isLoggedIn ? (
-                        'Login to Confirm Appointment'
-                      ) : (
-                        'Confirm Appointment'
-                      )}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setSelectedDoctor(null);
-                        setSelectedDate(null);
-                        setSelectedTimeSlot(null);
-                      }}
-                      className="btn btn-outline-teal"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                  
-                  {!isLoggedIn && (
-                    <p className="small text-muted text-center mt-2 mb-0">
-                      Please login to confirm your appointment booking
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  };
+  }, []);
 
   if (loading) {
     return (
@@ -898,11 +957,30 @@ const App = () => {
               {doctors.length > 0 ? (
                 <div className="doctors-grid">
                   {doctors.map((doctor) => (
-                    <DoctorCard key={doctor.id} doctor={doctor} />
+                    <DoctorCard 
+                      key={doctor.id} 
+                      doctor={doctor}
+                      isExpanded={selectedDoctor === doctor.id}
+                      selectedDate={selectedDate}
+                      selectedTimeSlot={selectedTimeSlot}
+                      currentDateIndex={currentDateIndex}
+                      dates={dates}
+                      isLoggedIn={isLoggedIn}
+                      isLoading={isLoading}
+                      doctorSlots={availableSlots[doctor.id] || []}
+                      onBookAppointment={handleBookAppointment}
+                      onShowDetails={handleShowDoctorDetails}
+                      onDateSelect={handleDateSelect}
+                      onTimeSlotSelect={handleTimeSlotSelect}
+                      onPrevDates={handlePrevDates}
+                      onNextDates={handleNextDates}
+                      onConfirmAppointment={handleConfirmAppointment}
+                      onCancel={handleCancelAppointment}
+                      getTimeSlotsForDate={getTimeSlotsForDate}
+                    />
                   ))}
                 </div>
               ) : (
-                /* Simple full-width no-doctors message */
                 <div style={{ 
                   width: '100%', 
                   padding: '4rem 2rem',
@@ -966,7 +1044,6 @@ const App = () => {
               <ul className="list-unstyled">
                 <li className="mb-2"><a href="#" className="text-muted text-decoration-none">Help Center</a></li>
                 <li className="mb-2"><a href="#" className="text-muted text-decoration-none">Contact Us</a></li>
-                <li className="mb-2"><a href="#" className="text-muted text-decoration-none">FAQ</a></li>
               </ul>
             </div>
             <div className="col-lg-3 col-md-6">
@@ -985,7 +1062,7 @@ const App = () => {
         </div>
       </footer>
 
-      {/* Auth Modal - Keep existing auth modal code */}
+      {/* Auth Modal - Keep existing modal code... */}
       {showAuthModal && (
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-md">
@@ -1008,7 +1085,6 @@ const App = () => {
                 ></button>
               </div>
               <div className="modal-body">
-                {/* Keep existing auth form code */}
                 {authStep === 'login-form' ? (
                   <form onSubmit={handleLoginSubmit}>
                     {formErrors.general && (
@@ -1379,7 +1455,7 @@ const App = () => {
                   className="btn btn-teal"
                   onClick={() => {
                     setShowDoctorModal(null);
-                    handleBookAppointment(showDoctorModal);
+                    handleBookAppointmentFromModal(showDoctorModal);
                   }}
                 >
                   Book Appointment
