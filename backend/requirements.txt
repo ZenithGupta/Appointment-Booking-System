@@ -31,4 +31,7 @@ tzdata==2025.2
 setuptools==78.1.1
 wheel==0.45.1
 
-django-crontab==0.7.1
+
+# For Automatic Database cleanup
+# django-crontab==0.7.1 (doesn't work on windows)
+APScheduler==3.10.4 # Cross-platform Scheduler for automatic cleanup (replaces django-crontab)
