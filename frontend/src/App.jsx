@@ -52,6 +52,43 @@ const FilterIcon = () => (
   </svg>
 );
 
+// Helper function to format time in 12-hour format
+const formatTime12Hour = (time24) => {
+  if (!time24) return '';
+  
+  const [hours, minutes] = time24.split(':');
+  const hour = parseInt(hours, 10);
+  const minute = parseInt(minutes, 10);
+  
+  const period = hour >= 12 ? 'PM' : 'AM';
+  const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+  
+  return `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
+};
+
+// Component to show existing appointments for the selected doctor/date
+const ExistingAppointmentWarning = React.memo(({ doctorId, selectedDate, doctor, checkExistingAppointment, isLoggedIn }) => {
+  if (!isLoggedIn || !selectedDate) return null;
+  
+  const existingAppointment = checkExistingAppointment(doctorId, selectedDate);
+  
+  if (!existingAppointment) return null;
+  
+  return (
+    <div className="alert alert-warning mb-3">
+      <div className="d-flex align-items-center gap-2">
+        <strong>⚠️ Existing Appointment</strong>
+      </div>
+      <small>
+        You already have an appointment with Dr. {doctor.first_name} {doctor.last_name} on {selectedDate.fullDate} 
+        from {existingAppointment.appointment_start_time} to {existingAppointment.appointment_end_time}.
+        <br />
+        <strong>Booking another appointment will give you multiple appointments on the same day.</strong>
+      </small>
+    </div>
+  );
+});
+
 // OPTIMIZED: DoctorCard component moved outside and memoized
 const DoctorCard = React.memo(({ 
   doctor, 
@@ -71,7 +108,9 @@ const DoctorCard = React.memo(({
   onNextDates,
   onConfirmAppointment,
   onCancel,
-  getTimeSlotsForDate
+  getTimeSlotsForDate,
+  checkExistingAppointment,
+  isSlotBookedByUser
 }) => {
   return (
     <div className="doctor-card-wrapper">
@@ -183,6 +222,15 @@ const DoctorCard = React.memo(({
                   Available Time Slots
                 </h6>
                 
+                {/* Existing appointment warning */}
+                <ExistingAppointmentWarning 
+                  doctorId={doctor.id} 
+                  selectedDate={selectedDate} 
+                  doctor={doctor}
+                  checkExistingAppointment={checkExistingAppointment}
+                  isLoggedIn={isLoggedIn}
+                />
+                
                 {(() => {
                   const timeSlots = getTimeSlotsForDate(doctor.id, selectedDate);
                   const isToday = selectedDate.fullDate === new Date().toISOString().split('T')[0];
@@ -200,21 +248,103 @@ const DoctorCard = React.memo(({
                     );
                   }
 
+                  // Separate slot-based and range-based appointments
+                  const slotBasedAppointments = timeSlots.filter(slot => slot.schedule_type === 'slot-based');
+                  const rangeBasedAppointments = timeSlots.filter(slot => slot.schedule_type === 'range-based');
+
                   return (
-                    <div className="row g-2 mb-4">
-                      {timeSlots.map((slot, index) => (
-                        <div key={index} className="col-6 col-md-4 col-lg-3">
-                          <button 
-                            onClick={() => onTimeSlotSelect(slot)}
-                            className={`btn w-100 time-slot ${
-                              selectedTimeSlot?.id === slot.id ? 'btn-lime' : 'btn-outline-teal'
-                            }`}
-                          >
-                            {slot.formatted_time}
-                          </button>
+                    <>
+                      {/* Slot-based appointments (30-minute fixed slots) */}
+                      {slotBasedAppointments.length > 0 && (
+                        <div className="mb-4">
+                          <div className="slot-type-header">
+                            <p className="small text-muted mb-0">
+                              <strong>Fixed Time Slots</strong> (30-minute appointments)
+                            </p>
+                          </div>
+                          <div className="row g-2">
+                            {slotBasedAppointments.map((slot, index) => {
+                              const isBooked = isSlotBookedByUser(doctor.id, selectedDate, slot);
+                              return (
+                                <div key={`slot-${slot.id}-${index}`} className="col-6 col-md-4 col-lg-3">
+                                  <button 
+                                    onClick={() => !isBooked && onTimeSlotSelect(slot)}
+                                    disabled={isBooked}
+                                    className={`btn w-100 time-slot position-relative ${
+                                      selectedTimeSlot?.id === slot.id ? 'btn-lime' : 
+                                      isBooked ? 'btn-secondary opacity-75' : 'btn-outline-teal'
+                                    }`}
+                                    title={isBooked ? 'You already have an appointment at this time' : ''}
+                                  >
+                                    {slot.formatted_time}
+                                    {isBooked && (
+                                      <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning">
+                                        Booked
+                                        <span className="visually-hidden">already booked</span>
+                                      </span>
+                                    )}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                      ))}
-                    </div>
+                      )}
+
+                      {/* Range-based appointments (flexible timing) */}
+                      {rangeBasedAppointments.length > 0 && (
+                        <div className="mb-4">
+                          <div className="slot-type-header range-based">
+                            <p className="small text-muted mb-0">
+                              <strong>Flexible Timing</strong> (book any duration within the range)
+                            </p>
+                          </div>
+                          <div className="row g-2">
+                            {rangeBasedAppointments.map((slot, index) => {
+                              const isBooked = isSlotBookedByUser(doctor.id, selectedDate, slot);
+                              return (
+                                <div key={`range-${slot.id}-${index}`} className="col-12">
+                                  <button 
+                                    onClick={() => !isBooked && onTimeSlotSelect(slot)}
+                                    disabled={isBooked}
+                                    className={`btn w-100 range-appointment-btn position-relative ${
+                                      selectedTimeSlot?.id === slot.id ? 'selected' : ''
+                                    } ${isBooked ? 'opacity-75' : ''}`}
+                                    style={{ 
+                                      minHeight: '60px',
+                                      borderStyle: 'dashed',
+                                      borderWidth: '2px',
+                                      backgroundColor: isBooked ? '#6c757d' : undefined
+                                    }}
+                                    title={isBooked ? 'You already have an appointment during this time range' : ''}
+                                  >
+                                    <div className="d-flex flex-column align-items-center">
+                                      <div className="fw-bold">{slot.formatted_time}</div>
+                                      <div className="small d-flex align-items-center gap-2">
+                                        {isBooked ? (
+                                          <span className="badge bg-warning text-dark">Already Booked</span>
+                                        ) : (
+                                          <>
+                                            <span className="flexible-badge">Flexible</span>
+                                            <span>{slot.available_slots} slots available</span>
+                                          </>
+                                        )}
+                                      </div>
+                                    </div>
+                                    {isBooked && (
+                                      <span className="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-warning">
+                                        Booked
+                                        <span className="visually-hidden">already booked</span>
+                                      </span>
+                                    )}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   );
                 })()}
                 
@@ -231,6 +361,8 @@ const DoctorCard = React.memo(({
                       </>
                     ) : !isLoggedIn ? (
                       'Login to Confirm Appointment'
+                    ) : selectedTimeSlot?.schedule_type === 'range-based' ? (
+                      'Book Flexible Appointment'
                     ) : (
                       'Confirm Appointment'
                     )}
@@ -247,6 +379,15 @@ const DoctorCard = React.memo(({
                   <p className="small text-muted text-center mt-2 mb-0">
                     Please login to confirm your appointment booking
                   </p>
+                )}
+                
+                {selectedTimeSlot?.schedule_type === 'range-based' && (
+                  <div className="alert alert-info mt-2 mb-0 range-info">
+                    <small>
+                      <strong>Flexible Appointment:</strong> You can discuss the exact timing and duration 
+                      with the doctor during your appointment within the {selectedTimeSlot.formatted_time} window.
+                    </small>
+                  </div>
                 )}
               </div>
             )}
@@ -274,6 +415,10 @@ const App = () => {
   const [showAuthDropdown, setShowAuthDropdown] = useState(false);
   const [showDoctorModal, setShowDoctorModal] = useState(null);
   const [selectedSpecialty, setSelectedSpecialty] = useState('all');
+  
+  // NEW: Duplicate booking prevention state
+  const [userAppointments, setUserAppointments] = useState([]);
+  const [loadingAppointments, setLoadingAppointments] = useState(false);
   
   // Auth popup states
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -315,6 +460,15 @@ const App = () => {
   useEffect(() => {
     loadDoctors();
   }, [selectedSpecialty]);
+
+  // NEW: Load user appointments when logged in
+  useEffect(() => {
+    if (isLoggedIn) {
+      loadUserAppointments();
+    } else {
+      setUserAppointments([]);
+    }
+  }, [isLoggedIn]);
 
   // OPTIMIZED: Memoize dates generation
   const dates = useMemo(() => {
@@ -393,6 +547,72 @@ const App = () => {
     }
   }, []);
 
+  // NEW: Function to load user's appointments
+  const loadUserAppointments = useCallback(async () => {
+    if (!isLoggedIn) return;
+    
+    setLoadingAppointments(true);
+    try {
+      const result = await appointmentsAPI.getMyAppointments();
+      if (result.success) {
+        // Filter for scheduled appointments only
+        const scheduledAppointments = result.data.filter(apt => apt.status === 'scheduled');
+        setUserAppointments(scheduledAppointments);
+      }
+    } catch (error) {
+      console.error('Error loading user appointments:', error);
+    } finally {
+      setLoadingAppointments(false);
+    }
+  }, [isLoggedIn]);
+
+  // NEW: Check if user has existing appointment for the selected doctor/date
+  const checkExistingAppointment = useCallback((doctorId, selectedDate) => {
+    if (!isLoggedIn || !selectedDate) return null;
+    
+    return userAppointments.find(appointment => {
+      const appointmentDate = appointment.schedule?.date || appointment.appointment_date;
+      return appointment.doctor === parseInt(doctorId) && 
+             appointmentDate === selectedDate.fullDate &&
+             appointment.status === 'scheduled';
+    });
+  }, [isLoggedIn, userAppointments]);
+
+  // NEW: Check for time conflicts
+  const checkTimeConflict = useCallback((doctorId, selectedDate, selectedTimeSlot) => {
+    if (!isLoggedIn || !selectedDate || !selectedTimeSlot) return null;
+    
+    const sameDateAppointments = userAppointments.filter(appointment => {
+      const appointmentDate = appointment.schedule?.date || appointment.appointment_date;
+      return appointment.doctor === parseInt(doctorId) && 
+             appointmentDate === selectedDate.fullDate &&
+             appointment.status === 'scheduled';
+    });
+    
+    // Check for time overlaps
+    for (const appointment of sameDateAppointments) {
+      const existingStart = appointment.appointment_start_time;
+      const existingEnd = appointment.appointment_end_time;
+      const newStart = selectedTimeSlot.start_time;
+      const newEnd = selectedTimeSlot.end_time;
+      
+      // Check if times overlap
+      if (newStart < existingEnd && newEnd > existingStart) {
+        return appointment;
+      }
+    }
+    
+    return null;
+  }, [isLoggedIn, userAppointments]);
+
+  // NEW: Check if a time slot is already booked by the user
+  const isSlotBookedByUser = useCallback((doctorId, selectedDate, timeSlot) => {
+    if (!isLoggedIn || !selectedDate || !timeSlot) return false;
+    
+    const conflict = checkTimeConflict(doctorId, selectedDate, timeSlot);
+    return !!conflict;
+  }, [isLoggedIn, checkTimeConflict]);
+
   // OPTIMIZED: Use useCallback for event handlers
   const handleNextDates = useCallback(() => {
     if (currentDateIndex < dates.length - 7) {
@@ -430,6 +650,7 @@ const App = () => {
     setSelectedDate(null);
     setSelectedTimeSlot(null);
     setUserName('');
+    setUserAppointments([]);
     setUserFormData({
       mobileNumber: '',
       otp: '',
@@ -493,6 +714,7 @@ const App = () => {
     setCurrentDateIndex(0);
   }, []);
 
+  // UPDATED: Enhanced confirm appointment with duplicate prevention
   const handleConfirmAppointment = useCallback(async () => {
     if (!isLoggedIn) {
       handleLogin();
@@ -504,25 +726,84 @@ const App = () => {
       return;
     }
 
+    // NEW: Check for existing appointments
+    const existingAppointment = checkExistingAppointment(selectedDoctor, selectedDate);
+    if (existingAppointment) {
+      const conflictTime = `${existingAppointment.appointment_start_time} - ${existingAppointment.appointment_end_time}`;
+      const confirmOverride = window.confirm(
+        `You already have an appointment with this doctor on ${selectedDate.fullDate} at ${conflictTime}.\n\n` +
+        `Are you sure you want to book another appointment?`
+      );
+      if (!confirmOverride) {
+        return;
+      }
+    }
+
+    // NEW: Check for time conflicts
+    const timeConflict = checkTimeConflict(selectedDoctor, selectedDate, selectedTimeSlot);
+    if (timeConflict) {
+      const conflictTime = `${timeConflict.appointment_start_time} - ${timeConflict.appointment_end_time}`;
+      alert(
+        `This appointment time conflicts with your existing appointment at ${conflictTime}.\n\n` +
+        `Please select a different time slot.`
+      );
+      return;
+    }
+
     setIsLoading(true);
     try {
-      const appointmentData = {
-        schedule_id: selectedTimeSlot.schedule_id,
-        time_slot_id: selectedTimeSlot.id,
-        notes: 'Appointment booked through website'
-      };
+      let appointmentData;
+
+      if (selectedTimeSlot.schedule_type === 'slot-based') {
+        appointmentData = {
+          schedule_id: selectedTimeSlot.schedule_id,
+          time_slot_id: selectedTimeSlot.id,
+          notes: 'Appointment booked through website'
+        };
+      } else if (selectedTimeSlot.schedule_type === 'range-based') {
+        appointmentData = {
+          schedule_id: selectedTimeSlot.schedule_id,
+          start_time: selectedTimeSlot.start_time,
+          end_time: selectedTimeSlot.end_time,
+          notes: 'Flexible timing appointment booked through website - exact timing to be confirmed with doctor'
+        };
+      }
+
+      console.log('🚀 Booking appointment with data:', appointmentData);
 
       const result = await appointmentsAPI.book(selectedDoctor, appointmentData);
       
       if (result.success) {
-        alert('Appointment booked successfully!');
+        const appointmentType = selectedTimeSlot.schedule_type === 'range-based' ? 'flexible timing' : 'fixed time';
+        alert(`${appointmentType.charAt(0).toUpperCase() + appointmentType.slice(1)} appointment booked successfully!`);
+        
+        // Reload user appointments and available slots
+        await loadUserAppointments();
+        await loadAvailableSlots(selectedDoctor);
+        
+        // Reset selections
         setSelectedDoctor(null);
         setSelectedDate(null);
         setSelectedTimeSlot(null);
-        // Reload available slots
-        await loadAvailableSlots(selectedDoctor);
       } else {
-        alert('Failed to book appointment: ' + result.error);
+        // NEW: Handle specific error codes
+        if (result.error && typeof result.error === 'object' && result.error.error_code) {
+          switch (result.error.error_code) {
+            case 'DUPLICATE_BOOKING':
+              alert('You already have an appointment booked for this exact time. Please check your existing appointments.');
+              break;
+            case 'OVERLAPPING_APPOINTMENT':
+              alert('This appointment overlaps with an existing appointment. Please select a different time.');
+              break;
+            case 'MAX_APPOINTMENTS_REACHED':
+              alert('You have reached the maximum number of appointments (2) with this doctor for the selected date.');
+              break;
+            default:
+              alert('Failed to book appointment: ' + (result.error.message || result.error));
+          }
+        } else {
+          alert('Failed to book appointment: ' + result.error);
+        }
       }
     } catch (error) {
       alert('Error booking appointment. Please try again.');
@@ -530,7 +811,7 @@ const App = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [isLoggedIn, selectedDoctor, selectedDate, selectedTimeSlot, handleLogin, loadAvailableSlots]);
+  }, [isLoggedIn, selectedDoctor, selectedDate, selectedTimeSlot, handleLogin, loadAvailableSlots, loadUserAppointments, checkExistingAppointment, checkTimeConflict]);
 
   const handleCancelAppointment = useCallback(() => {
     setSelectedDoctor(null);
@@ -538,7 +819,7 @@ const App = () => {
     setSelectedTimeSlot(null);
   }, []);
 
-  // OPTIMIZED: Memoize time slots function with past time filtering
+  // UPDATED: Enhanced time slots function to handle both types
   const getTimeSlotsForDate = useCallback((doctorId, selectedDate) => {
     if (!selectedDate || !availableSlots[doctorId]) {
       return [];
@@ -554,31 +835,67 @@ const App = () => {
     const currentTime = now.getHours() * 60 + now.getMinutes(); // Current time in minutes since midnight
     
     slotsForDate.forEach(schedule => {
-      if (schedule.available_time_slots && Array.isArray(schedule.available_time_slots)) {
-        schedule.available_time_slots.forEach(slot => {
-          // Parse slot start time (format: "HH:MM" or "HH:MM:SS")
-          const slotStartTime = slot.start_time;
-          let slotMinutes = 0;
+      if (schedule.time_range === 'slot-based') {
+        // Handle slot-based schedules (existing logic)
+        if (schedule.available_time_slots && Array.isArray(schedule.available_time_slots)) {
+          schedule.available_time_slots.forEach(slot => {
+            // Parse slot start time (format: "HH:MM" or "HH:MM:SS")
+            const slotStartTime = slot.start_time;
+            let slotMinutes = 0;
+            
+            if (slotStartTime) {
+              const timeParts = slotStartTime.split(':');
+              const hours = parseInt(timeParts[0], 10);
+              const minutes = parseInt(timeParts[1], 10);
+              slotMinutes = hours * 60 + minutes;
+            }
+            
+            // If it's today, only show slots that are in the future (at least 30 minutes from now)
+            const isToday = selectedDate.fullDate === today;
+            const isInFuture = !isToday || (slotMinutes > currentTime + 30);
+            
+            if (isInFuture) {
+              timeSlots.push({
+                ...slot,
+                schedule_id: schedule.id,
+                schedule_type: 'slot-based',
+                formatted_time: slot.formatted_time || `${slot.start_time} - ${slot.end_time}`
+              });
+            }
+          });
+        }
+      } else if (schedule.time_range === 'range-based') {
+        // Handle range-based schedules - show as full time block
+        const scheduleStartTime = schedule.start_time;
+        let scheduleMinutes = 0;
+        
+        if (scheduleStartTime) {
+          const timeParts = scheduleStartTime.split(':');
+          const hours = parseInt(timeParts[0], 10);
+          const minutes = parseInt(timeParts[1], 10);
+          scheduleMinutes = hours * 60 + minutes;
+        }
+        
+        // If it's today, only show if the schedule hasn't ended yet
+        const isToday = selectedDate.fullDate === today;
+        const isInFuture = !isToday || (scheduleMinutes > currentTime + 30);
+        
+        if (isInFuture && schedule.available_slots > 0) {
+          // Format time for display
+          const startTime12 = formatTime12Hour(schedule.start_time);
+          const endTime12 = formatTime12Hour(schedule.end_time);
           
-          if (slotStartTime) {
-            const timeParts = slotStartTime.split(':');
-            const hours = parseInt(timeParts[0], 10);
-            const minutes = parseInt(timeParts[1], 10);
-            slotMinutes = hours * 60 + minutes;
-          }
-          
-          // If it's today, only show slots that are in the future (at least 30 minutes from now)
-          const isToday = selectedDate.fullDate === today;
-          const isInFuture = !isToday || (slotMinutes > currentTime + 30);
-          
-          if (isInFuture) {
-            timeSlots.push({
-              ...slot,
-              schedule_id: schedule.id,
-              formatted_time: slot.formatted_time || `${slot.start_time} - ${slot.end_time}`
-            });
-          }
-        });
+          timeSlots.push({
+            id: `range-${schedule.id}`,
+            schedule_id: schedule.id,
+            schedule_type: 'range-based',
+            start_time: schedule.start_time,
+            end_time: schedule.end_time,
+            formatted_time: `${startTime12} - ${endTime12}`,
+            range_display: `Flexible timing between ${startTime12} and ${endTime12}`,
+            available_slots: schedule.available_slots
+          });
+        }
       }
     });
 
@@ -977,6 +1294,8 @@ const App = () => {
                       onConfirmAppointment={handleConfirmAppointment}
                       onCancel={handleCancelAppointment}
                       getTimeSlotsForDate={getTimeSlotsForDate}
+                      checkExistingAppointment={checkExistingAppointment}
+                      isSlotBookedByUser={isSlotBookedByUser}
                     />
                   ))}
                 </div>
@@ -1062,7 +1381,7 @@ const App = () => {
         </div>
       </footer>
 
-      {/* Auth Modal - Keep existing modal code... */}
+      {/* Auth Modal */}
       {showAuthModal && (
         <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
           <div className="modal-dialog modal-md">
