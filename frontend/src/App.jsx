@@ -1246,7 +1246,7 @@ const App = () => {
         </div>
       </section>
 
-      {/* Doctors Section */}
+      {/* 🔧 FIXED: Doctors Section - Always uses doctors-grid container */}
       <section className="py-5">
         <div className="doctors-container">
           <div className="text-center mb-5">
@@ -1270,52 +1270,45 @@ const App = () => {
               <p>Loading doctors...</p>
             </div>
           ) : (
-            <>
+            {/* 🔧 FIXED: Always render the doctors-grid container */}
+            <div className="doctors-grid">
               {doctors.length > 0 ? (
-                <div className="doctors-grid">
-                  {doctors.map((doctor) => (
-                    <DoctorCard 
-                      key={doctor.id} 
-                      doctor={doctor}
-                      isExpanded={selectedDoctor === doctor.id}
-                      selectedDate={selectedDate}
-                      selectedTimeSlot={selectedTimeSlot}
-                      currentDateIndex={currentDateIndex}
-                      dates={dates}
-                      isLoggedIn={isLoggedIn}
-                      isLoading={isLoading}
-                      doctorSlots={availableSlots[doctor.id] || []}
-                      onBookAppointment={handleBookAppointment}
-                      onShowDetails={handleShowDoctorDetails}
-                      onDateSelect={handleDateSelect}
-                      onTimeSlotSelect={handleTimeSlotSelect}
-                      onPrevDates={handlePrevDates}
-                      onNextDates={handleNextDates}
-                      onConfirmAppointment={handleConfirmAppointment}
-                      onCancel={handleCancelAppointment}
-                      getTimeSlotsForDate={getTimeSlotsForDate}
-                      checkExistingAppointment={checkExistingAppointment}
-                      isSlotBookedByUser={isSlotBookedByUser}
-                    />
-                  ))}
-                </div>
+                // Render doctor cards when doctors exist
+                doctors.map((doctor) => (
+                  <DoctorCard 
+                    key={doctor.id} 
+                    doctor={doctor}
+                    isExpanded={selectedDoctor === doctor.id}
+                    selectedDate={selectedDate}
+                    selectedTimeSlot={selectedTimeSlot}
+                    currentDateIndex={currentDateIndex}
+                    dates={dates}
+                    isLoggedIn={isLoggedIn}
+                    isLoading={isLoading}
+                    doctorSlots={availableSlots[doctor.id] || []}
+                    onBookAppointment={handleBookAppointment}
+                    onShowDetails={handleShowDoctorDetails}
+                    onDateSelect={handleDateSelect}
+                    onTimeSlotSelect={handleTimeSlotSelect}
+                    onPrevDates={handlePrevDates}
+                    onNextDates={handleNextDates}
+                    onConfirmAppointment={handleConfirmAppointment}
+                    onCancel={handleCancelAppointment}
+                    getTimeSlotsForDate={getTimeSlotsForDate}
+                    checkExistingAppointment={checkExistingAppointment}
+                    isSlotBookedByUser={isSlotBookedByUser}
+                  />
+                ))
               ) : (
-                <div style={{ 
-                  width: '100%', 
-                  padding: '4rem 2rem',
-                  backgroundColor: 'white',
-                  borderRadius: '16px',
-                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                  margin: '2rem 0',
-                  textAlign: 'center'
-                }}>
+                // 🔧 FIXED: No doctors message now properly contained within grid
+                <div className="no-doctors-message">
                   <div className="mb-3">
                     <UserIcon size={60} />
                   </div>
-                  <h4 className="mb-3" style={{ color: '#6c757d' }}>
+                  <h4 className="mb-3 text-muted">
                     No {selectedSpecialty === 'all' ? 'doctors' : selectedSpecialty.toLowerCase() + 's'} available
                   </h4>
-                  <p className="mb-4" style={{ color: '#6c757d' }}>
+                  <p className="mb-4 text-muted">
                     {selectedSpecialty === 'all' 
                       ? 'We are working to add more doctors to our platform.' 
                       : `We currently don't have any ${selectedSpecialty.toLowerCase()}s available. Try browsing other specialties.`
@@ -1337,7 +1330,7 @@ const App = () => {
                   </div>
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       </section>

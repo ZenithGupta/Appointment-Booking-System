@@ -12,6 +12,9 @@ django-cors-headers==4.7.0
 # Image Processing
 Pillow==11.2.1
 
+# 🔧 NEW: Timezone Support
+pytz==2025.2  # For handling IST timezone properly
+
 # Database Support
 # For PostgreSQL (uncomment if needed):
 # psycopg2-binary==2.9.9
@@ -31,7 +34,8 @@ tzdata==2025.2
 setuptools==78.1.1
 wheel==0.45.1
 
+# For Automatic Database cleanup - Enhanced
+APScheduler==3.10.4  # Cross-platform Scheduler for automatic cleanup with timezone support
 
-# For Automatic Database cleanup
-# django-crontab==0.7.1 (doesn't work on windows)
-APScheduler==3.10.4 # Cross-platform Scheduler for automatic cleanup (replaces django-crontab)
+# 🔧 NEW: Additional utilities for enhanced validation
+python-dateutil==2.9.0  # Better date/time parsing and manipulation
