@@ -245,7 +245,7 @@ class AvailableSlotsView(APIView):
         # Filter out past schedules using IST timezone
         available_slots = DoctorSchedule.objects.filter(
             doctor=doctor,
-            date__gte=today,
+            date__gte=today,  # Only today and future dates
             date__lte=end_date,
             is_active=True,
             available_slots__gt=0
