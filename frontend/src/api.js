@@ -331,15 +331,43 @@ export const appointmentsAPI = {
     }
   },
 
-  // Book appointment
+  // UPDATED: Enhanced book appointment with better error handling
   book: async (doctorId, appointmentData) => {
     try {
       const response = await api.post(`/appointment/book/${doctorId}/`, appointmentData);
       return { success: true, data: response.data };
     } catch (error) {
+      console.error('Booking error details:', error.response);
+      
+      let errorDetails = 'Failed to book appointment';
+      
+      if (error.response?.data) {
+        const errorData = error.response.data;
+        
+        // Handle specific error codes from backend
+        if (errorData.error_code) {
+          return {
+            success: false,
+            error: {
+              message: errorData.message,
+              error_code: errorData.error_code
+            }
+          };
+        }
+        
+        // Handle general error messages
+        if (errorData.message) {
+          errorDetails = errorData.message;
+        } else if (errorData.error) {
+          errorDetails = errorData.error;
+        } else if (typeof errorData === 'string') {
+          errorDetails = errorData;
+        }
+      }
+      
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to book appointment',
+        error: errorDetails,
       };
     }
   },

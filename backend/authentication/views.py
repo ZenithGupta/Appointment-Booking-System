@@ -20,7 +20,19 @@ from .serializers import (
     MedicalHistorySerializer, AppointmentSerializer, BookAppointmentSerializer
 )
 
-# Authentication views
+# 🔧 NEW: Import enhanced validation functions
+from .enhanced_validation import (
+    get_current_ist_time,
+    validate_not_in_past,
+    validate_appointment_booking,
+    log_security_attempt,
+    get_client_ip
+)
+
+import logging
+logger = logging.getLogger(__name__)
+
+# Authentication views (unchanged)
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
@@ -48,7 +60,7 @@ class LoginView(APIView):
         email = request.data.get('email')
         password = request.data.get('password')
         
-        print(f"🔍 Login attempt: {email} / {'*' * len(password) if password else 'None'}")
+        logger.info(f"🔍 Login attempt: {email}")
         
         if not email or not password:
             return Response({
@@ -58,18 +70,18 @@ class LoginView(APIView):
         try:
             # Find user by email
             user = User.objects.get(email=email)
-            print(f"🔍 User found: {user.username}")
+            logger.info(f"🔍 User found: {user.username}")
             
             # Authenticate with username and password
             authenticated_user = authenticate(username=user.username, password=password)
-            print(f"🔍 Authentication result: {authenticated_user}")
+            logger.info(f"🔍 Authentication result: {authenticated_user}")
             
             if authenticated_user and authenticated_user.is_active:
                 # Create JWT tokens
                 refresh = RefreshToken.for_user(authenticated_user)
                 access_token = refresh.access_token
                 
-                print("✅ Login successful!")
+                logger.info("✅ Login successful!")
                 
                 return Response({
                     'refresh': str(refresh),
@@ -81,13 +93,13 @@ class LoginView(APIView):
                     'last_name': authenticated_user.last_name
                 })
             else:
-                print("❌ Authentication failed")
+                logger.warning("❌ Authentication failed")
                 return Response({
                     'error': 'Invalid credentials'
                 }, status=status.HTTP_401_UNAUTHORIZED)
                 
         except User.DoesNotExist:
-            print("❌ User not found")
+            logger.warning("❌ User not found")
             return Response({
                 'error': 'Invalid credentials'
             }, status=status.HTTP_401_UNAUTHORIZED)
@@ -125,16 +137,16 @@ class ChangePasswordView(APIView):
         user.save()
         return Response({"success": "Password updated successfully"}, status=status.HTTP_200_OK)
 
-# Doctor related views
+# Doctor related views (unchanged)
 class SpecialtyViewSet(viewsets.ModelViewSet):
     queryset = Specialty.objects.all()
     serializer_class = SpecialtySerializer
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
-            permission_classes = [AllowAny]  # Anyone can view specialties
+            permission_classes = [AllowAny]
         else:
-            permission_classes = [IsAuthenticated]  # Must be logged in to create/edit/delete
+            permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
 
 class LanguageViewSet(viewsets.ModelViewSet):
@@ -143,9 +155,9 @@ class LanguageViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
-            permission_classes = [AllowAny]  # Anyone can view languages
+            permission_classes = [AllowAny]
         else:
-            permission_classes = [IsAuthenticated]  # Must be logged in to create/edit/delete
+            permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
 
 class DoctorViewSet(viewsets.ModelViewSet):
@@ -156,9 +168,9 @@ class DoctorViewSet(viewsets.ModelViewSet):
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
-            permission_classes = [AllowAny]  # Anyone can view doctors
+            permission_classes = [AllowAny]
         else:
-            permission_classes = [IsAuthenticated]  # Must be logged in to create/edit/delete
+            permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
 
 class DoctorsBySpecialtyView(generics.ListAPIView):
@@ -169,25 +181,50 @@ class DoctorsBySpecialtyView(generics.ListAPIView):
         specialty_id = self.kwargs['specialty_id']
         return Doctor.objects.filter(specialties__id=specialty_id)
 
+# 🔧 ENHANCED: Schedule views with timezone validation
 class DoctorScheduleViewSet(viewsets.ModelViewSet):
     queryset = DoctorSchedule.objects.all()
     serializer_class = DoctorScheduleSerializer
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
-            permission_classes = [AllowAny]  # Anyone can view schedules
+            permission_classes = [AllowAny]
         else:
-            permission_classes = [IsAuthenticated]  # Must be logged in to create/edit/delete
+            permission_classes = [IsAuthenticated]
         return [permission() for permission in permission_classes]
     
     def perform_create(self, serializer):
-        """Add extra validation when creating schedules"""
+        """Enhanced schedule creation with timezone validation"""
         try:
+            # Get data from serializer
+            schedule_date = serializer.validated_data.get('date')
+            start_time = serializer.validated_data.get('start_time')
+            
+            # Validate with IST timezone
+            validation_result = validate_not_in_past(schedule_date, start_time, buffer_minutes=30)
+            
+            if not validation_result['valid']:
+                # Log security attempt
+                log_security_attempt(
+                    user=self.request.user,
+                    action='PAST_SCHEDULE_CREATION_ATTEMPT',
+                    details=f"Attempted to create schedule for {schedule_date} at {start_time}. {validation_result['message']}",
+                    ip_address=get_client_ip(self.request)
+                )
+                
+                from rest_framework import serializers as drf_serializers
+                raise drf_serializers.ValidationError({
+                    'error': validation_result['message'],
+                    'current_ist': validation_result['current_ist'].strftime('%Y-%m-%d %H:%M:%S IST')
+                })
+            
             serializer.save()
+            
         except ValidationError as e:
             from rest_framework import serializers as drf_serializers
             raise drf_serializers.ValidationError(e.message_dict)
 
+# 🔧 ENHANCED: Available slots with IST timezone filtering
 class AvailableSlotsView(APIView):
     permission_classes = [AllowAny]
     
@@ -197,11 +234,15 @@ class AvailableSlotsView(APIView):
         except Doctor.DoesNotExist:
             return Response({'error': 'Doctor not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        # Get today's date and future dates only
-        today = timezone.now().date()
+        # Get current IST time for filtering
+        now_ist = get_current_ist_time()
+        today = now_ist.date()
+        current_time = now_ist.time()
+        
+        # Get schedules from today onwards
         end_date = today + timedelta(days=30)
         
-        # Filter out past schedules and get only future/today's schedules
+        # Filter out past schedules using IST timezone
         available_slots = DoctorSchedule.objects.filter(
             doctor=doctor,
             date__gte=today,  # Only today and future dates
@@ -210,14 +251,13 @@ class AvailableSlotsView(APIView):
             available_slots__gt=0
         ).order_by('date', 'start_time')
         
-        # For today's schedules, also filter by time
-        current_time = timezone.now().time()
+        # For today's schedules, also filter by time (IST)
         filtered_slots = []
         
         for schedule in available_slots:
             if schedule.date == today:
                 # For today, only include schedules that start in the future (with buffer)
-                buffer_time = (timezone.now() + timedelta(minutes=30)).time()
+                buffer_time = (now_ist + timedelta(minutes=30)).time()
                 if schedule.start_time > buffer_time:
                     filtered_slots.append(schedule)
             else:
@@ -237,6 +277,16 @@ class AvailableTimeSlotsView(APIView):
                 doctor_id=doctor_id, 
                 is_active=True
             )
+            
+            # 🔧 ENHANCED: Validate schedule is not in past (IST)
+            validation_result = validate_not_in_past(schedule.date, schedule.start_time)
+            
+            if not validation_result['valid']:
+                return Response({
+                    'error': 'This schedule is no longer available',
+                    'message': validation_result['message']
+                }, status=status.HTTP_400_BAD_REQUEST)
+            
             serializer = DoctorScheduleSerializer(schedule)
             return Response({
                 'schedule': serializer.data,
@@ -248,13 +298,12 @@ class AvailableTimeSlotsView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-# Patient views
+# Patient views (unchanged)
 class PatientViewSet(viewsets.ModelViewSet):
     serializer_class = PatientSerializer
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        # Users can only see their own patient profile
         return Patient.objects.filter(user=self.request.user)
     
     def perform_create(self, serializer):
@@ -265,20 +314,18 @@ class MedicalHistoryViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        # Users can only see their own medical history
         return MedicalHistory.objects.filter(patient__user=self.request.user)
     
     def perform_create(self, serializer):
         patient = get_object_or_404(Patient, user=self.request.user)
         serializer.save(patient=patient)
 
-# Appointment views
+# 🔧 ENHANCED: Appointment views with comprehensive security
 class AppointmentViewSet(viewsets.ModelViewSet):
     serializer_class = AppointmentSerializer
     permission_classes = [IsAuthenticated]
     
     def get_queryset(self):
-        # Users can only see their own appointments
         try:
             patient = Patient.objects.get(user=self.request.user)
             return Appointment.objects.filter(patient=patient)
@@ -286,25 +333,38 @@ class AppointmentViewSet(viewsets.ModelViewSet):
             return Appointment.objects.none()
     
     def perform_create(self, serializer):
-        # Get or create patient for this user
         patient, created = Patient.objects.get_or_create(
             user=self.request.user,
             defaults={
                 'first_name': self.request.user.first_name or 'Unknown',
                 'last_name': self.request.user.last_name or 'User',
-                'date_of_birth': '2000-01-01',  # Default date
+                'date_of_birth': '2000-01-01',
                 'phone_number': '',
                 'address': ''
             }
         )
         serializer.save(patient=patient)
 
+# 🔧 COMPLETELY REWRITTEN: Enhanced booking with comprehensive validation
 class BookAppointmentView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request, doctor_id):
+        # Get client IP for security logging
+        client_ip = get_client_ip(request)
+        
+        # Log the booking attempt
+        logger.info(f"📅 Appointment booking attempt by {request.user.username} for doctor {doctor_id}")
+        
         serializer = BookAppointmentSerializer(data=request.data)
         if not serializer.is_valid():
+            # Log validation failure
+            log_security_attempt(
+                user=request.user,
+                action='INVALID_BOOKING_DATA',
+                details=f"Invalid booking data: {serializer.errors}",
+                ip_address=client_ip
+            )
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         data = serializer.validated_data
@@ -315,27 +375,61 @@ class BookAppointmentView(APIView):
             schedule = DoctorSchedule.objects.get(id=schedule_id, doctor_id=doctor_id)
         except DoctorSchedule.DoesNotExist:
             return Response({
-                'message': 'Schedule not found'
+                'error': 'Schedule not found',
+                'error_code': 'SCHEDULE_NOT_FOUND'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Validate schedule is not in the past
-        now = timezone.now()
-        if schedule.date < now.date():
-            return Response({
-                'message': 'Cannot book appointments for past dates'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        if schedule.date == now.date():
-            buffer_time = (now + timedelta(minutes=30)).time()
-            if schedule.start_time <= buffer_time:
+        # Prepare appointment data for validation
+        if schedule.time_range == 'slot-based':
+            time_slot_id = data.get('time_slot_id')
+            try:
+                time_slot = TimeSlot.objects.get(
+                    id=time_slot_id,
+                    schedule=schedule,
+                    is_booked=False
+                )
+                appointment_start_time = time_slot.start_time
+                appointment_end_time = time_slot.end_time
+            except TimeSlot.DoesNotExist:
+                log_security_attempt(
+                    user=request.user,
+                    action='INVALID_TIME_SLOT',
+                    details=f"Attempted to book invalid time slot {time_slot_id}",
+                    ip_address=client_ip
+                )
                 return Response({
-                    'message': 'Cannot book appointments less than 30 minutes in advance'
+                    'error': 'Time slot not available',
+                    'error_code': 'TIME_SLOT_NOT_AVAILABLE'
                 }, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            appointment_start_time = data.get('start_time')
+            appointment_end_time = data.get('end_time')
+            time_slot = None
         
-        # Check if there are available slots
-        if schedule.available_slots <= 0:
+        # 🔧 ENHANCED: Comprehensive validation with IST timezone
+        validation_result = validate_appointment_booking(
+            doctor_id=doctor_id,
+            schedule_id=schedule_id,
+            date=schedule.date,
+            start_time=appointment_start_time,
+            end_time=appointment_end_time,
+            user=request.user
+        )
+        
+        if not validation_result['valid']:
+            # Log security attempt if trying to book past appointments
+            if validation_result.get('error_code') in ['PAST_TIME', 'DATE_MISMATCH']:
+                log_security_attempt(
+                    user=request.user,
+                    action='PAST_BOOKING_ATTEMPT',
+                    details=f"Attempted to book past appointment: {validation_result['message']}",
+                    ip_address=client_ip
+                )
+            
             return Response({
-                'message': 'No available slots for this schedule'
+                'error': validation_result['message'],
+                'error_code': validation_result.get('error_code'),
+                'current_ist': validation_result['current_ist'].strftime('%Y-%m-%d %H:%M:%S IST')
             }, status=status.HTTP_400_BAD_REQUEST)
         
         # Get or create patient for this user
@@ -344,57 +438,19 @@ class BookAppointmentView(APIView):
             defaults={
                 'first_name': request.user.first_name or 'Unknown',
                 'last_name': request.user.last_name or 'User',
-                'date_of_birth': data.get('date_of_birth'),
+                'date_of_birth': data.get('date_of_birth', '2000-01-01'),
                 'phone_number': data.get('phone_number', ''),
                 'address': data.get('address', '')
             }
         )
         
-        # Handle slot-based vs range-based appointments
-        time_slot = None
-        if schedule.time_range == 'slot-based':
-            # For slot-based appointments
-            time_slot_id = data.get('time_slot_id')
-            try:
-                time_slot = TimeSlot.objects.get(
-                    id=time_slot_id,
-                    schedule=schedule,
-                    is_booked=False
-                )
-                
-                # Additional validation for past time slots
-                if schedule.date == now.date():
-                    buffer_time = (now + timedelta(minutes=15)).time()
-                    if time_slot.start_time <= buffer_time:
-                        return Response({
-                            'message': 'This time slot is no longer available'
-                        }, status=status.HTTP_400_BAD_REQUEST)
-                
+        # Create appointment within transaction
+        try:
+            # Mark time slot as booked if slot-based
+            if time_slot:
                 time_slot.is_booked = True
                 time_slot.save()
-                
-                appointment_start_time = time_slot.start_time
-                appointment_end_time = time_slot.end_time
-                
-            except TimeSlot.DoesNotExist:
-                return Response({
-                    'message': 'Time slot not available'
-                }, status=status.HTTP_400_BAD_REQUEST)
-        else:
-            # For range-based appointments
-            appointment_start_time = data.get('start_time')
-            appointment_end_time = data.get('end_time')
             
-            # Validate appointment time is not in the past
-            if schedule.date == now.date():
-                buffer_time = (now + timedelta(minutes=15)).time()
-                if appointment_start_time <= buffer_time:
-                    return Response({
-                        'message': 'Appointment time must be at least 15 minutes in the future'
-                    }, status=status.HTTP_400_BAD_REQUEST)
-        
-        # Create appointment
-        try:
             appointment = Appointment.objects.create(
                 patient=patient,
                 doctor_id=doctor_id,
@@ -409,26 +465,43 @@ class BookAppointmentView(APIView):
             schedule.available_slots -= 1
             schedule.save()
             
+            # Log successful booking
+            logger.info(f"✅ Appointment booked successfully: {appointment.id} by {request.user.username}")
+            
             return Response({
                 'message': 'Appointment booked successfully',
-                'appointment': AppointmentSerializer(appointment).data
+                'appointment': AppointmentSerializer(appointment).data,
+                'booking_time_ist': get_current_ist_time().strftime('%Y-%m-%d %H:%M:%S IST')
             }, status=status.HTTP_201_CREATED)
             
         except ValidationError as e:
-            # If appointment creation fails due to validation, restore the time slot
+            # If appointment creation fails, restore the time slot
             if time_slot:
                 time_slot.is_booked = False
                 time_slot.save()
             
             return Response({
-                'message': str(e)
+                'error': str(e),
+                'error_code': 'VALIDATION_ERROR'
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        except Exception as e:
+            # If any error occurs, restore the time slot
+            if time_slot:
+                time_slot.is_booked = False
+                time_slot.save()
+            
+            logger.error(f"❌ Error creating appointment: {str(e)}", exc_info=True)
+            return Response({
+                'error': 'Failed to create appointment',
+                'error_code': 'CREATION_ERROR'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+# 🔧 ENHANCED: Cancel appointment with validation
 class CancelAppointmentView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request, appointment_id):
-        # Get the appointment
         try:
             appointment = Appointment.objects.get(
                 id=appointment_id,
@@ -436,14 +509,33 @@ class CancelAppointmentView(APIView):
             )
         except Appointment.DoesNotExist:
             return Response({
-                'message': 'Appointment not found'
+                'error': 'Appointment not found',
+                'error_code': 'APPOINTMENT_NOT_FOUND'
             }, status=status.HTTP_404_NOT_FOUND)
         
         # Check if appointment can be canceled
         if appointment.status != 'scheduled':
             return Response({
-                'message': 'This appointment cannot be canceled'
+                'error': 'This appointment cannot be canceled',
+                'error_code': 'CANNOT_CANCEL'
             }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 🔧 ENHANCED: Check if cancellation is not too late (e.g., at least 2 hours before)
+        now_ist = get_current_ist_time()
+        appointment_datetime = datetime.combine(
+            appointment.schedule.date, 
+            appointment.appointment_start_time
+        )
+        
+        # If appointment is today, check time difference
+        if appointment.schedule.date == now_ist.date():
+            time_until_appointment = (appointment_datetime.time().hour * 60 + appointment_datetime.time().minute) - (now_ist.hour * 60 + now_ist.minute)
+            
+            if time_until_appointment < 120:  # Less than 2 hours
+                return Response({
+                    'error': 'Cannot cancel appointment less than 2 hours before the scheduled time',
+                    'error_code': 'TOO_LATE_TO_CANCEL'
+                }, status=status.HTTP_400_BAD_REQUEST)
         
         # Update status
         appointment.status = 'canceled'
@@ -459,6 +551,10 @@ class CancelAppointmentView(APIView):
         schedule.available_slots += 1
         schedule.save()
         
+        # Log cancellation
+        logger.info(f"❌ Appointment {appointment_id} canceled by {request.user.username}")
+        
         return Response({
-            'message': 'Appointment canceled successfully'
+            'message': 'Appointment canceled successfully',
+            'canceled_at_ist': now_ist.strftime('%Y-%m-%d %H:%M:%S IST')
         }, status=status.HTTP_200_OK)
