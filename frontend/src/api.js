@@ -252,7 +252,7 @@ export const doctorsAPI = {
   getAll: async () => {
     try {
       const response = await api.get('/doctors/');
-      return { success: true, data: response.data };
+      return { success: true, data: response.data.results };
     } catch (error) {
       return {
         success: false,
