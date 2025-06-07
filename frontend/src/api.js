@@ -1,4 +1,4 @@
-// api.js - API configuration and service functions
+// api.js - Updated with pagination support
 import axios from 'axios';
 
 // API Base Configuration
@@ -77,7 +77,7 @@ api.interceptors.response.use(
   }
 );
 
-// Authentication API calls
+// Authentication API calls (unchanged)
 export const authAPI = {
   // Register new user
   register: async (userData) => {
@@ -246,13 +246,31 @@ export const authAPI = {
   },
 };
 
-// Doctors API calls
+// 🆕 UPDATED: Doctors API calls with pagination support
 export const doctorsAPI = {
-  // Get all doctors
-  getAll: async () => {
+  // Get all doctors with pagination
+  getAll: async (page = 1, pageSize = 10) => {
     try {
-      const response = await api.get('/doctors/');
-      return { success: true, data: response.data.results };
+      const response = await api.get('/doctors/', {
+        params: {
+          page,
+          page_size: pageSize
+        }
+      });
+      
+      // Return both results and pagination info
+      return { 
+        success: true, 
+        data: response.data.results,
+        pagination: {
+          count: response.data.count,
+          next: response.data.next,
+          previous: response.data.previous,
+          total_pages: Math.ceil(response.data.count / pageSize),
+          current_page: page,
+          page_size: pageSize
+        }
+      };
     } catch (error) {
       return {
         success: false,
@@ -261,11 +279,47 @@ export const doctorsAPI = {
     }
   },
 
-  // Get doctors by specialty
-  getBySpecialty: async (specialtyId) => {
+  // Get doctors by specialty with pagination
+  getBySpecialty: async (specialtyId, page = 1, pageSize = 10) => {
     try {
-      const response = await api.get(`/doctors/by-specialty/${specialtyId}/`);
-      return { success: true, data: response.data };
+      const response = await api.get(`/doctors/by-specialty/${specialtyId}/`, {
+        params: {
+          page,
+          page_size: pageSize
+        }
+      });
+      
+      // Handle both paginated and non-paginated responses
+      if (response.data.results) {
+        // Paginated response
+        return { 
+          success: true, 
+          data: response.data.results,
+          pagination: {
+            count: response.data.count,
+            next: response.data.next,
+            previous: response.data.previous,
+            total_pages: Math.ceil(response.data.count / pageSize),
+            current_page: page,
+            page_size: pageSize
+          }
+        };
+      } else {
+        // Non-paginated response (convert to paginated format)
+        const results = Array.isArray(response.data) ? response.data : [response.data];
+        return { 
+          success: true, 
+          data: results,
+          pagination: {
+            count: results.length,
+            next: null,
+            previous: null,
+            total_pages: 1,
+            current_page: 1,
+            page_size: pageSize  // Keep the requested page size, not results.length
+          }
+        };
+      }
     } catch (error) {
       return {
         success: false,
@@ -301,7 +355,7 @@ export const doctorsAPI = {
   },
 };
 
-// Specialties API calls
+// Specialties API calls (unchanged)
 export const specialtiesAPI = {
   getAll: async () => {
     try {
@@ -316,7 +370,7 @@ export const specialtiesAPI = {
   },
 };
 
-// Appointments API calls
+// Appointments API calls (unchanged)
 export const appointmentsAPI = {
   // Get user's appointments
   getMyAppointments: async () => {
