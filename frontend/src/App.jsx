@@ -66,6 +66,116 @@ const formatTime12Hour = (time24) => {
   return `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
 };
 
+// Pagination Controls Component (Fixed - No Page Size Selector)
+const PaginationControls = React.memo(({ 
+  currentPage, 
+  totalPages, 
+  totalCount, 
+  pageSize, 
+  onPageChange,
+  loading = false 
+}) => {
+  if (totalPages <= 1) return null;
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxPagesToShow = 5;
+    
+    if (totalPages <= maxPagesToShow) {
+      // Show all pages if total is small
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Smart pagination with ellipsis
+      if (currentPage <= 3) {
+        // Show first pages
+        for (let i = 1; i <= 4; i++) {
+          pages.push(i);
+        }
+        pages.push('...');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        // Show last pages
+        pages.push(1);
+        pages.push('...');
+        for (let i = totalPages - 3; i <= totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        // Show middle pages
+        pages.push(1);
+        pages.push('...');
+        for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+          pages.push(i);
+        }
+        pages.push('...');
+        pages.push(totalPages);
+      }
+    }
+    
+    return pages;
+  };
+
+  const startItem = (currentPage - 1) * pageSize + 1;
+  const endItem = Math.min(currentPage * pageSize, totalCount);
+
+  return (
+    <div className="d-flex flex-column flex-md-row justify-content-between align-items-center gap-3 mt-4 p-3 bg-white rounded-3 shadow-sm">
+      {/* Results Info */}
+      <div className="text-muted small">
+        Showing <strong>{startItem}</strong> to <strong>{endItem}</strong> of <strong>{totalCount}</strong> doctors
+      </div>
+
+      {/* Pagination Controls */}
+      <nav aria-label="Doctors pagination">
+        <ul className="pagination pagination-sm mb-0">
+          {/* Previous Button */}
+          <li className={`page-item ${currentPage === 1 || loading ? 'disabled' : ''}`}>
+            <button 
+              className="page-link"
+              onClick={() => !loading && currentPage > 1 && onPageChange(currentPage - 1)}
+              disabled={currentPage === 1 || loading}
+              aria-label="Previous page"
+            >
+              <ChevronLeftIcon />
+            </button>
+          </li>
+
+          {/* Page Numbers */}
+          {getPageNumbers().map((page, index) => (
+            <li key={index} className={`page-item ${page === currentPage ? 'active' : ''} ${page === '...' || loading ? 'disabled' : ''}`}>
+              {page === '...' ? (
+                <span className="page-link">...</span>
+              ) : (
+                <button 
+                  className="page-link"
+                  onClick={() => !loading && onPageChange(page)}
+                  disabled={loading}
+                >
+                  {page}
+                </button>
+              )}
+            </li>
+          ))}
+
+          {/* Next Button */}
+          <li className={`page-item ${currentPage === totalPages || loading ? 'disabled' : ''}`}>
+            <button 
+              className="page-link"
+              onClick={() => !loading && currentPage < totalPages && onPageChange(currentPage + 1)}
+              disabled={currentPage === totalPages || loading}
+              aria-label="Next page"
+            >
+              <ChevronRightIcon />
+            </button>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  );
+});
+
 // Component to show existing appointments for the selected doctor/date
 const ExistingAppointmentWarning = React.memo(({ doctorId, selectedDate, doctor, checkExistingAppointment, isLoggedIn }) => {
   if (!isLoggedIn || !selectedDate) return null;
@@ -89,7 +199,7 @@ const ExistingAppointmentWarning = React.memo(({ doctorId, selectedDate, doctor,
   );
 });
 
-// OPTIMIZED: DoctorCard component moved outside and memoized
+// DoctorCard component
 const DoctorCard = React.memo(({ 
   doctor, 
   isExpanded, 
@@ -406,6 +516,14 @@ const App = () => {
   const [loading, setLoading] = useState(true);
   const [doctorsLoading, setDoctorsLoading] = useState(false);
 
+  // Pagination state (Fixed page size at 10)
+  const [pagination, setPagination] = useState({
+    currentPage: 1,
+    totalPages: 1,
+    totalCount: 0,
+    pageSize: 10  // Fixed at 10, no changing allowed
+  });
+
   // UI state
   const [selectedDoctor, setSelectedDoctor] = useState(null);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -416,7 +534,7 @@ const App = () => {
   const [showDoctorModal, setShowDoctorModal] = useState(null);
   const [selectedSpecialty, setSelectedSpecialty] = useState('all');
   
-  // NEW: Duplicate booking prevention state
+  // Duplicate booking prevention state
   const [userAppointments, setUserAppointments] = useState([]);
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   
@@ -451,25 +569,6 @@ const App = () => {
     checkAuth();
   }, []);
 
-  // Load initial data
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  // Load doctors when specialty filter changes
-  useEffect(() => {
-    loadDoctors();
-  }, [selectedSpecialty]);
-
-  // NEW: Load user appointments when logged in
-  useEffect(() => {
-    if (isLoggedIn) {
-      loadUserAppointments();
-    } else {
-      setUserAppointments([]);
-    }
-  }, [isLoggedIn]);
-
   // OPTIMIZED: Memoize dates generation
   const dates = useMemo(() => {
     const dateArray = [];
@@ -488,18 +587,38 @@ const App = () => {
     return dateArray;
   }, []);
 
-  // OPTIMIZED: Use useCallback for API functions
+  // Load initial data function
   const loadInitialData = useCallback(async () => {
     setLoading(true);
     try {
-      // Load specialties
+      // Load specialties first
       const specialtiesResult = await specialtiesAPI.getAll();
       if (specialtiesResult.success) {
         setSpecialties(specialtiesResult.data);
       }
 
-      // Load all doctors initially
-      await loadDoctors();
+      // Load first page of doctors directly (always 10 per page)
+      const doctorsResult = await doctorsAPI.getAll(1, 10);
+      if (doctorsResult.success) {
+        setDoctors(doctorsResult.data);
+        
+        // Set initial pagination state
+        if (doctorsResult.pagination) {
+          setPagination({
+            currentPage: doctorsResult.pagination.current_page,
+            totalPages: doctorsResult.pagination.total_pages,
+            totalCount: doctorsResult.pagination.count,
+            pageSize: 10
+          });
+        } else {
+          setPagination({
+            currentPage: 1,
+            totalPages: 1,
+            totalCount: doctorsResult.data.length,
+            pageSize: 10
+          });
+        }
+      }
     } catch (error) {
       console.error('Error loading initial data:', error);
     } finally {
@@ -507,24 +626,43 @@ const App = () => {
     }
   }, []);
 
-  const loadDoctors = useCallback(async () => {
+  // Enhanced loadDoctors function
+  const loadDoctors = useCallback(async (page = 1, pageSize = 10) => {
     setDoctorsLoading(true);
     try {
       let doctorsResult;
       
       if (selectedSpecialty === 'all') {
-        doctorsResult = await doctorsAPI.getAll();
+        doctorsResult = await doctorsAPI.getAll(page, pageSize);
       } else {
         const specialty = specialties.find(s => s.name === selectedSpecialty);
         if (specialty) {
-          doctorsResult = await doctorsAPI.getBySpecialty(specialty.id);
+          doctorsResult = await doctorsAPI.getBySpecialty(specialty.id, page, pageSize);
         } else {
-          doctorsResult = await doctorsAPI.getAll();
+          doctorsResult = await doctorsAPI.getAll(page, pageSize);
         }
       }
 
       if (doctorsResult.success) {
         setDoctors(doctorsResult.data);
+        
+        // Update pagination state - ensure pageSize is always 10
+        if (doctorsResult.pagination) {
+          setPagination({
+            currentPage: doctorsResult.pagination.current_page,
+            totalPages: doctorsResult.pagination.total_pages,
+            totalCount: doctorsResult.pagination.count,
+            pageSize: 10  // Always keep it at 10, regardless of backend response
+          });
+        } else {
+          // Fallback for non-paginated responses
+          setPagination({
+            currentPage: 1,
+            totalPages: 1,
+            totalCount: doctorsResult.data.length,
+            pageSize: 10
+          });
+        }
       }
     } catch (error) {
       console.error('Error loading doctors:', error);
@@ -532,6 +670,43 @@ const App = () => {
       setDoctorsLoading(false);
     }
   }, [selectedSpecialty, specialties]);
+
+  // Load initial data
+  useEffect(() => {
+    loadInitialData();
+  }, [loadInitialData]);
+
+  // Load doctors when specialty filter or pagination changes (Fixed page size)
+  useEffect(() => {
+    if (specialties.length > 0) {  // Only load doctors after specialties are loaded
+      loadDoctors(pagination.currentPage, 10);  // Always use 10
+    }
+  }, [selectedSpecialty, pagination.currentPage, loadDoctors, specialties.length]);
+
+  // Load user appointments when logged in
+  useEffect(() => {
+    if (isLoggedIn) {
+      loadUserAppointments();
+    } else {
+      setUserAppointments([]);
+    }
+  }, [isLoggedIn]);
+
+  // Page change handler (Fixed page size)
+  const handlePageChange = useCallback((newPage) => {
+    if (newPage !== pagination.currentPage) {
+      setPagination(prev => ({
+        ...prev,
+        currentPage: newPage
+      }));
+    }
+
+    // Clear selections when changing pages
+    setSelectedDoctor(null);
+    setSelectedDate(null);
+    setSelectedTimeSlot(null);
+    setCurrentDateIndex(0);
+  }, [pagination.currentPage]);
 
   const loadAvailableSlots = useCallback(async (doctorId) => {
     try {
@@ -547,7 +722,7 @@ const App = () => {
     }
   }, []);
 
-  // NEW: Function to load user's appointments
+  // Function to load user's appointments
   const loadUserAppointments = useCallback(async () => {
     if (!isLoggedIn) return;
     
@@ -566,7 +741,7 @@ const App = () => {
     }
   }, [isLoggedIn]);
 
-  // NEW: Check if user has existing appointment for the selected doctor/date
+  // Check if user has existing appointment for the selected doctor/date
   const checkExistingAppointment = useCallback((doctorId, selectedDate) => {
     if (!isLoggedIn || !selectedDate) return null;
     
@@ -578,7 +753,7 @@ const App = () => {
     });
   }, [isLoggedIn, userAppointments]);
 
-  // NEW: Check for time conflicts
+  // Check for time conflicts
   const checkTimeConflict = useCallback((doctorId, selectedDate, selectedTimeSlot) => {
     if (!isLoggedIn || !selectedDate || !selectedTimeSlot) return null;
     
@@ -605,7 +780,7 @@ const App = () => {
     return null;
   }, [isLoggedIn, userAppointments]);
 
-  // NEW: Check if a time slot is already booked by the user
+  // Check if a time slot is already booked by the user
   const isSlotBookedByUser = useCallback((doctorId, selectedDate, timeSlot) => {
     if (!isLoggedIn || !selectedDate || !timeSlot) return false;
     
@@ -613,7 +788,7 @@ const App = () => {
     return !!conflict;
   }, [isLoggedIn, checkTimeConflict]);
 
-  // OPTIMIZED: Use useCallback for event handlers
+  // Event handlers
   const handleNextDates = useCallback(() => {
     if (currentDateIndex < dates.length - 7) {
       setCurrentDateIndex(currentDateIndex + 1);
@@ -706,15 +881,24 @@ const App = () => {
     setSelectedTimeSlot(slot);
   }, []);
 
+  // Handle specialty change with proper pagination reset
   const handleSpecialtyChange = useCallback((specialty) => {
     setSelectedSpecialty(specialty);
     setSelectedDoctor(null);
     setSelectedDate(null);
     setSelectedTimeSlot(null);
     setCurrentDateIndex(0);
+    
+    // Reset pagination to first page and ensure page size is 10
+    setPagination({
+      currentPage: 1,
+      totalPages: 1,
+      totalCount: 0,
+      pageSize: 10
+    });
   }, []);
 
-  // UPDATED: Enhanced confirm appointment with duplicate prevention
+  // Enhanced confirm appointment with duplicate prevention
   const handleConfirmAppointment = useCallback(async () => {
     if (!isLoggedIn) {
       handleLogin();
@@ -726,7 +910,7 @@ const App = () => {
       return;
     }
 
-    // NEW: Check for existing appointments
+    // Check for existing appointments
     const existingAppointment = checkExistingAppointment(selectedDoctor, selectedDate);
     if (existingAppointment) {
       const conflictTime = `${existingAppointment.appointment_start_time} - ${existingAppointment.appointment_end_time}`;
@@ -739,7 +923,7 @@ const App = () => {
       }
     }
 
-    // NEW: Check for time conflicts
+    // Check for time conflicts
     const timeConflict = checkTimeConflict(selectedDoctor, selectedDate, selectedTimeSlot);
     if (timeConflict) {
       const conflictTime = `${timeConflict.appointment_start_time} - ${timeConflict.appointment_end_time}`;
@@ -786,7 +970,7 @@ const App = () => {
         setSelectedDate(null);
         setSelectedTimeSlot(null);
       } else {
-        // NEW: Handle specific error codes
+        // Handle specific error codes
         if (result.error && typeof result.error === 'object' && result.error.error_code) {
           switch (result.error.error_code) {
             case 'DUPLICATE_BOOKING':
@@ -819,7 +1003,7 @@ const App = () => {
     setSelectedTimeSlot(null);
   }, []);
 
-  // UPDATED: Enhanced time slots function to handle both types
+  // Enhanced time slots function to handle both types
   const getTimeSlotsForDate = useCallback((doctorId, selectedDate) => {
     if (!selectedDate || !availableSlots[doctorId]) {
       return [];
@@ -947,7 +1131,7 @@ const App = () => {
     return errors;
   };
 
-  // OPTIMIZED: Use useCallback for form handlers
+  // Form handlers
   const handleMobileSubmit = useCallback(async (e) => {
     e.preventDefault();
     const errors = validateMobile();
@@ -1258,7 +1442,7 @@ const App = () => {
             <p className="lead text-muted">
               {selectedSpecialty === 'all'
                 ? 'Choose from our panel of experienced doctors across various specialties'
-                : `Showing ${doctors.length} ${selectedSpecialty.toLowerCase()}${doctors.length !== 1 ? 's' : ''}`}
+                : `Showing ${pagination.totalCount} ${selectedSpecialty.toLowerCase()}${pagination.totalCount !== 1 ? 's' : ''}`}
             </p>
           </div>
 
@@ -1272,33 +1456,45 @@ const App = () => {
           ) : (
             <>
               {doctors.length > 0 ? (
-                <div className="doctors-grid">
-                  {doctors.map((doctor) => (
-                    <DoctorCard 
-                      key={doctor.id} 
-                      doctor={doctor}
-                      isExpanded={selectedDoctor === doctor.id}
-                      selectedDate={selectedDate}
-                      selectedTimeSlot={selectedTimeSlot}
-                      currentDateIndex={currentDateIndex}
-                      dates={dates}
-                      isLoggedIn={isLoggedIn}
-                      isLoading={isLoading}
-                      doctorSlots={availableSlots[doctor.id] || []}
-                      onBookAppointment={handleBookAppointment}
-                      onShowDetails={handleShowDoctorDetails}
-                      onDateSelect={handleDateSelect}
-                      onTimeSlotSelect={handleTimeSlotSelect}
-                      onPrevDates={handlePrevDates}
-                      onNextDates={handleNextDates}
-                      onConfirmAppointment={handleConfirmAppointment}
-                      onCancel={handleCancelAppointment}
-                      getTimeSlotsForDate={getTimeSlotsForDate}
-                      checkExistingAppointment={checkExistingAppointment}
-                      isSlotBookedByUser={isSlotBookedByUser}
-                    />
-                  ))}
-                </div>
+                <>
+                  <div className="doctors-grid">
+                    {doctors.map((doctor) => (
+                      <DoctorCard 
+                        key={doctor.id} 
+                        doctor={doctor}
+                        isExpanded={selectedDoctor === doctor.id}
+                        selectedDate={selectedDate}
+                        selectedTimeSlot={selectedTimeSlot}
+                        currentDateIndex={currentDateIndex}
+                        dates={dates}
+                        isLoggedIn={isLoggedIn}
+                        isLoading={isLoading}
+                        doctorSlots={availableSlots[doctor.id] || []}
+                        onBookAppointment={handleBookAppointment}
+                        onShowDetails={handleShowDoctorDetails}
+                        onDateSelect={handleDateSelect}
+                        onTimeSlotSelect={handleTimeSlotSelect}
+                        onPrevDates={handlePrevDates}
+                        onNextDates={handleNextDates}
+                        onConfirmAppointment={handleConfirmAppointment}
+                        onCancel={handleCancelAppointment}
+                        getTimeSlotsForDate={getTimeSlotsForDate}
+                        checkExistingAppointment={checkExistingAppointment}
+                        isSlotBookedByUser={isSlotBookedByUser}
+                      />
+                    ))}
+                  </div>
+
+                  {/* Pagination Controls */}
+                  <PaginationControls
+                    currentPage={pagination.currentPage}
+                    totalPages={pagination.totalPages}
+                    totalCount={pagination.totalCount}
+                    pageSize={pagination.pageSize}
+                    onPageChange={handlePageChange}
+                    loading={doctorsLoading}
+                  />
+                </>
               ) : (
                 <div style={{ 
                   width: '100%', 
