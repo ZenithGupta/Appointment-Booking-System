@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAdminUser
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
@@ -31,6 +32,12 @@ from .enhanced_validation import (
 
 import logging
 logger = logging.getLogger(__name__)
+
+class CustomPagination(PageNumberPagination):
+        page_size = 10
+        page_size_query_param = 'page_size'
+        max_page_size = 100
+
 
 # Authentication views (unchanged)
 class RegisterView(generics.CreateAPIView):
@@ -165,6 +172,7 @@ class DoctorViewSet(viewsets.ModelViewSet):
     serializer_class = DoctorSerializer
     filterset_fields = ['specialties', 'languages']
     search_fields = ['first_name', 'last_name', 'bio']
+    pagination_class = CustomPagination
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
