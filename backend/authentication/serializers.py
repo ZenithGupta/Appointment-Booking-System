@@ -159,12 +159,15 @@ class MedicalHistorySerializer(serializers.ModelSerializer):
         model = MedicalHistory
         fields = '__all__'
 
-# Appointment related serializers
 class AppointmentSerializer(serializers.ModelSerializer):
     patient_name = serializers.SerializerMethodField()
     doctor_name = serializers.SerializerMethodField()
     appointment_time_formatted = serializers.SerializerMethodField()
     schedule_type = serializers.CharField(source='schedule.time_range', read_only=True)
+    
+    # ADD THESE NEW FIELDS:
+    appointment_date = serializers.CharField(source='schedule.date', read_only=True)
+    schedule_date = serializers.CharField(source='schedule.date', read_only=True)  # Alternative field name
     
     class Meta:
         model = Appointment
