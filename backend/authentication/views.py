@@ -184,6 +184,7 @@ class DoctorViewSet(viewsets.ModelViewSet):
 class DoctorsBySpecialtyView(generics.ListAPIView):
     serializer_class = DoctorSerializer
     permission_classes = [AllowAny]
+    pagination_class = CustomPagination
     
     def get_queryset(self):
         specialty_id = self.kwargs['specialty_id']
