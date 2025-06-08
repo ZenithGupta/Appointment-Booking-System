@@ -255,7 +255,7 @@ const MyAppointmentsModal = React.memo(({
                                     </div>
                                     <div className="flex-grow-1">
                                       <h6 className="fw-bold mb-1">
-                                        Dr. {appointment.doctor_name}
+                                        {appointment.doctor_name}
                                       </h6>
                                       <div className="text-muted small mb-2">
                                         <div className="d-flex align-items-center gap-3 flex-wrap">
@@ -348,7 +348,7 @@ const MyAppointmentsModal = React.memo(({
                                     </div>
                                     <div className="flex-grow-1">
                                       <h6 className="fw-bold mb-1 text-muted">
-                                        Dr. {appointment.doctor_name}
+                                        {appointment.doctor_name}
                                       </h6>
                                       <div className="text-muted small">
                                         <div className="d-flex align-items-center gap-3 flex-wrap">
@@ -1700,7 +1700,7 @@ const App = () => {
                     <div 
                       className="auth-dropdown"
                       onMouseEnter={() => setShowAuthDropdown(true)}
-                      onMouseLeave={() => setTimeout(() => setShowAuthDropdown(false), 300)}
+                      onMouseLeave={() => setTimeout(() => setShowAuthDropdown(false), 1000)}
                     >
                       <button className="btn btn-teal btn-sm">
                         Welcome, {userName || 'User'}
