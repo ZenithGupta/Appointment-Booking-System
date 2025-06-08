@@ -925,3 +925,276 @@ footer a:hover {
   outline-offset: 2px;
   z-index: 1;
 }
+
+/* My Appointments Modal Enhancements */
+.appointments-modal .modal-dialog {
+  max-width: 1000px;
+}
+
+.appointment-card {
+  transition: all 0.3s ease;
+  border: none !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.appointment-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+}
+
+.appointment-card.upcoming {
+  border-left: 4px solid #28a745 !important;
+}
+
+.appointment-card.past {
+  border-left: 4px solid #6c757d !important;
+}
+
+.appointment-card.canceled {
+  border-left: 4px solid #dc3545 !important;
+}
+
+/* Status badges styling */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  padding: 0.4rem 0.8rem;
+}
+
+.badge svg {
+  width: 12px;
+  height: 12px;
+}
+
+.badge.bg-success {
+  background-color: #28a745 !important;
+}
+
+.badge.bg-secondary {
+  background-color: #6c757d !important;
+}
+
+.badge.bg-danger {
+  background-color: #dc3545 !important;
+}
+
+.badge.bg-warning {
+  background-color: #ffc107 !important;
+  color: #000 !important;
+}
+
+/* Appointment time and date styling */
+.appointment-meta {
+  font-size: 0.875rem;
+  color: #6c757d;
+}
+
+.appointment-meta svg {
+  width: 14px;
+  height: 14px;
+  margin-right: 0.25rem;
+}
+
+/* Cancel button styling */
+.btn-outline-danger {
+  border-color: #dc3545;
+  color: #dc3545;
+  transition: all 0.2s ease;
+}
+
+.btn-outline-danger:hover {
+  background-color: #dc3545;
+  border-color: #dc3545;
+  color: white;
+  transform: translateY(-1px);
+}
+
+.btn-outline-danger:disabled {
+  opacity: 0.6;
+  transform: none;
+}
+
+/* Flexible timing badge */
+.flexible-timing-badge {
+  background-color: #fff3cd;
+  color: #856404;
+  border: 1px solid #ffeaa7;
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 500;
+  margin-top: 0.5rem;
+}
+
+/* Empty state styling */
+.appointments-empty-state {
+  text-align: center;
+  padding: 3rem 2rem;
+  color: #6c757d;
+}
+
+.appointments-empty-state svg {
+  width: 64px;
+  height: 64px;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+/* Section headers */
+.appointments-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.5rem 0;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.appointments-section-header svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Loading state */
+.appointments-loading {
+  text-align: center;
+  padding: 3rem 2rem;
+}
+
+.appointments-loading .spinner-border {
+  width: 3rem;
+  height: 3rem;
+}
+
+/* Responsive adjustments for appointments modal */
+@media (max-width: 768px) {
+  .appointments-modal .modal-dialog {
+    margin: 0.5rem;
+    max-width: calc(100vw - 1rem);
+  }
+  
+  .appointment-card .row {
+    flex-direction: column;
+  }
+  
+  .appointment-card .col-md-4 {
+    text-align: left !important;
+    margin-bottom: 1rem;
+  }
+  
+  .appointment-meta {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .appointment-meta > span {
+    display: flex;
+    align-items: center;
+  }
+  
+  .btn-outline-danger {
+    width: 100%;
+    margin-top: 0.5rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .appointments-modal .modal-dialog {
+    margin: 0.25rem;
+    max-width: calc(100vw - 0.5rem);
+  }
+  
+  .appointments-section-header {
+    font-size: 0.9rem;
+  }
+  
+  .appointment-card .card-body {
+    padding: 1rem;
+  }
+  
+  .doctor-image {
+    width: 50px !important;
+    height: 50px !important;
+  }
+  
+  .badge {
+    font-size: 0.7rem;
+    padding: 0.3rem 0.6rem;
+  }
+}
+
+/* Animation for modal content */
+.appointments-modal .modal-content {
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-50px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Scrollbar styling for appointment list */
+.appointments-modal .modal-body {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.appointments-modal .modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.appointments-modal .modal-body::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.appointments-modal .modal-body::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.appointments-modal .modal-body::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Appointment notes styling */
+.appointment-notes {
+  font-style: italic;
+  color: #6c757d;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border-left: 3px solid #007bff;
+}
+
+/* Cancellation policy notice */
+.cancellation-notice {
+  background-color: #fff3cd;
+  border: 1px solid #ffeaa7;
+  border-radius: 4px;
+  padding: 0.5rem;
+  font-size: 0.8rem;
+  color: #856404;
+  text-align: center;
+}
+
+/* Past appointments count indicator */
+.past-appointments-count {
+  background-color: #e9ecef;
+  border-radius: 4px;
+  padding: 0.5rem 1rem;
+  text-align: center;
+  margin-top: 1rem;
+  font-size: 0.85rem;
+  color: #6c757d;
+}

@@ -27,6 +27,28 @@ const MapPinIcon = () => (
   </svg>
 );
 
+const XIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <line x1="18" y1="6" x2="6" y2="18"></line>
+    <line x1="6" y1="6" x2="18" y2="18"></line>
+  </svg>
+);
+
+const CheckCircleIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+    <polyline points="22,4 12,14.01 9,11.01"></polyline>
+  </svg>
+);
+
+const AlertCircleIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <circle cx="12" cy="12" r="10"></circle>
+    <line x1="12" y1="8" x2="12" y2="12"></line>
+    <line x1="12" y1="16" x2="12.01" y2="16"></line>
+  </svg>
+);
+
 const ChevronLeftIcon = () => (
   <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
     <polyline points="15,18 9,12 15,6"></polyline>
@@ -65,6 +87,336 @@ const formatTime12Hour = (time24) => {
   
   return `${hour12}:${minute.toString().padStart(2, '0')} ${period}`;
 };
+
+// Helper function to format date
+const formatDate = (dateString) => {
+  const date = new Date(dateString);
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  
+  const dateStr = date.toISOString().split('T')[0];
+  const todayStr = today.toISOString().split('T')[0];
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  
+  if (dateStr === todayStr) {
+    return 'Today';
+  } else if (dateStr === tomorrowStr) {
+    return 'Tomorrow';
+  } else {
+    return date.toLocaleDateString('en-US', { 
+      weekday: 'short', 
+      month: 'short', 
+      day: 'numeric',
+      year: date.getFullYear() !== today.getFullYear() ? 'numeric' : undefined
+    });
+  }
+};
+
+// Helper function to get status badge
+const getStatusBadge = (status) => {
+  switch (status) {
+    case 'scheduled':
+      return <span className="badge bg-success"><CheckCircleIcon /> Scheduled</span>;
+    case 'completed':
+      return <span className="badge bg-secondary"><CheckCircleIcon /> Completed</span>;
+    case 'canceled':
+      return <span className="badge bg-danger"><XIcon /> Canceled</span>;
+    case 'no_show':
+      return <span className="badge bg-warning"><AlertCircleIcon /> No Show</span>;
+    default:
+      return <span className="badge bg-secondary">{status}</span>;
+  }
+};
+
+// Helper function to check if appointment can be canceled
+const canCancelAppointment = (appointment) => {
+  if (appointment.status !== 'scheduled') return false;
+  
+  const appointmentDate = new Date(appointment.schedule?.date || appointment.appointment_date);
+  const appointmentTime = appointment.appointment_start_time;
+  const now = new Date();
+  
+  // Combine date and time
+  const [hours, minutes] = appointmentTime.split(':');
+  appointmentDate.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+  
+  // Check if appointment is at least 2 hours in the future
+  const twoHoursFromNow = new Date(now.getTime() + (2 * 60 * 60 * 1000));
+  
+  return appointmentDate > twoHoursFromNow;
+};
+
+// My Appointments Modal Component
+const MyAppointmentsModal = React.memo(({ 
+  show, 
+  onClose, 
+  appointments, 
+  loading, 
+  onCancelAppointment,
+  onRefresh 
+}) => {
+  const [canceling, setCanceling] = useState(null);
+
+  const handleCancelAppointment = async (appointmentId) => {
+    if (!window.confirm('Are you sure you want to cancel this appointment?')) {
+      return;
+    }
+
+    setCanceling(appointmentId);
+    try {
+      const result = await appointmentsAPI.cancel(appointmentId);
+      if (result.success) {
+        alert('Appointment canceled successfully!');
+        onRefresh(); // Refresh the appointments list
+      } else {
+        alert('Failed to cancel appointment: ' + result.error);
+      }
+    } catch (error) {
+      alert('Error canceling appointment. Please try again.');
+      console.error('Cancel error:', error);
+    } finally {
+      setCanceling(null);
+    }
+  };
+
+  if (!show) return null;
+
+  // Separate upcoming and past appointments
+  const now = new Date();
+  const upcomingAppointments = appointments.filter(apt => {
+    const aptDate = new Date(apt.schedule?.date || apt.appointment_date);
+    return aptDate >= now.setHours(0, 0, 0, 0) && apt.status === 'scheduled';
+  });
+  
+  const pastAppointments = appointments.filter(apt => {
+    const aptDate = new Date(apt.schedule?.date || apt.appointment_date);
+    return aptDate < now.setHours(0, 0, 0, 0) || apt.status !== 'scheduled';
+  });
+
+  return (
+    <div className="modal show d-block" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
+      <div className="modal-dialog modal-xl">
+        <div className="modal-content">
+          <div className="modal-header">
+            <h5 className="modal-title d-flex align-items-center gap-2">
+              <CalendarIcon />
+              My Appointments
+            </h5>
+            <button 
+              type="button" 
+              className="btn-close" 
+              onClick={onClose}
+            ></button>
+          </div>
+          <div className="modal-body">
+            {loading ? (
+              <div className="text-center py-5">
+                <div className="spinner-border text-primary mb-3" role="status">
+                  <span className="visually-hidden">Loading...</span>
+                </div>
+                <p>Loading your appointments...</p>
+              </div>
+            ) : appointments.length === 0 ? (
+              <div className="text-center py-5">
+                <div className="mb-3">
+                  <CalendarIcon />
+                </div>
+                <h5 className="text-muted mb-3">No Appointments Yet</h5>
+                <p className="text-muted mb-4">
+                  You haven't booked any appointments yet. Browse our doctors and book your first appointment!
+                </p>
+                <button 
+                  className="btn btn-teal"
+                  onClick={onClose}
+                >
+                  Browse Doctors
+                </button>
+              </div>
+            ) : (
+              <>
+                {/* Upcoming Appointments */}
+                {upcomingAppointments.length > 0 && (
+                  <div className="mb-5">
+                    <h6 className="fw-bold mb-3 text-success d-flex align-items-center gap-2">
+                      <CalendarIcon />
+                      Upcoming Appointments ({upcomingAppointments.length})
+                    </h6>
+                    <div className="row g-3">
+                      {upcomingAppointments.map((appointment) => (
+                        <div key={appointment.id} className="col-12">
+                          <div className="card border-start border-success border-4">
+                            <div className="card-body">
+                              <div className="row align-items-center">
+                                <div className="col-md-8">
+                                  <div className="d-flex align-items-start gap-3">
+                                    <div className="doctor-image bg-light rounded d-flex align-items-center justify-content-center" style={{ width: '60px', height: '60px' }}>
+                                      <UserIcon size={24} />
+                                    </div>
+                                    <div className="flex-grow-1">
+                                      <h6 className="fw-bold mb-1">
+                                        Dr. {appointment.doctor_name}
+                                      </h6>
+                                      <div className="text-muted small mb-2">
+                                        <div className="d-flex align-items-center gap-3 flex-wrap">
+                                          <span className="d-flex align-items-center gap-1">
+                                            <CalendarIcon />
+                                            {formatDate(appointment.schedule?.date || appointment.appointment_date)}
+                                          </span>
+                                          <span className="d-flex align-items-center gap-1">
+                                            <ClockIcon />
+                                            {formatTime12Hour(appointment.appointment_start_time)} - {formatTime12Hour(appointment.appointment_end_time)}
+                                          </span>
+                                          <span className="d-flex align-items-center gap-1">
+                                            <MapPinIcon />
+                                            Apollo Hospital
+                                          </span>
+                                        </div>
+                                      </div>
+                                      {appointment.notes && (
+                                        <p className="small text-muted mb-0">
+                                          <strong>Notes:</strong> {appointment.notes}
+                                        </p>
+                                      )}
+                                      {appointment.schedule_type === 'range-based' && (
+                                        <span className="badge bg-warning text-dark mt-1">
+                                          Flexible Timing
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="col-md-4 text-md-end">
+                                  <div className="mb-2">
+                                    {getStatusBadge(appointment.status)}
+                                  </div>
+                                  {canCancelAppointment(appointment) && (
+                                    <button
+                                      onClick={() => handleCancelAppointment(appointment.id)}
+                                      disabled={canceling === appointment.id}
+                                      className="btn btn-outline-danger btn-sm"
+                                    >
+                                      {canceling === appointment.id ? (
+                                        <>
+                                          <span className="spinner-border spinner-border-sm me-1" role="status"></span>
+                                          Canceling...
+                                        </>
+                                      ) : (
+                                        <>
+                                          <XIcon />
+                                          Cancel
+                                        </>
+                                      )}
+                                    </button>
+                                  )}
+                                  {!canCancelAppointment(appointment) && appointment.status === 'scheduled' && (
+                                    <small className="text-muted">
+                                      Cannot cancel<br />
+                                      (Less than 2 hours to appointment)
+                                    </small>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Past Appointments */}
+                {pastAppointments.length > 0 && (
+                  <div>
+                    <h6 className="fw-bold mb-3 text-muted d-flex align-items-center gap-2">
+                      <CheckCircleIcon />
+                      Past Appointments ({pastAppointments.length})
+                    </h6>
+                    <div className="row g-3">
+                      {pastAppointments
+                        .sort((a, b) => new Date(b.schedule?.date || b.appointment_date) - new Date(a.schedule?.date || a.appointment_date))
+                        .slice(0, 10) // Show last 10 past appointments
+                        .map((appointment) => (
+                        <div key={appointment.id} className="col-12">
+                          <div className="card border-start border-secondary border-2 bg-light">
+                            <div className="card-body py-3">
+                              <div className="row align-items-center">
+                                <div className="col-md-8">
+                                  <div className="d-flex align-items-start gap-3">
+                                    <div className="doctor-image bg-secondary bg-opacity-25 rounded d-flex align-items-center justify-content-center" style={{ width: '50px', height: '50px' }}>
+                                      <UserIcon size={20} />
+                                    </div>
+                                    <div className="flex-grow-1">
+                                      <h6 className="fw-bold mb-1 text-muted">
+                                        Dr. {appointment.doctor_name}
+                                      </h6>
+                                      <div className="text-muted small">
+                                        <div className="d-flex align-items-center gap-3 flex-wrap">
+                                          <span className="d-flex align-items-center gap-1">
+                                            <CalendarIcon />
+                                            {formatDate(appointment.schedule?.date || appointment.appointment_date)}
+                                          </span>
+                                          <span className="d-flex align-items-center gap-1">
+                                            <ClockIcon />
+                                            {formatTime12Hour(appointment.appointment_start_time)} - {formatTime12Hour(appointment.appointment_end_time)}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="col-md-4 text-md-end">
+                                  {getStatusBadge(appointment.status)}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    {pastAppointments.length > 10 && (
+                      <div className="text-center mt-3">
+                        <small className="text-muted">
+                          Showing last 10 appointments. Total: {pastAppointments.length}
+                        </small>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <div className="modal-footer">
+            <button 
+              type="button" 
+              className="btn btn-secondary" 
+              onClick={onClose}
+            >
+              Close
+            </button>
+            <button 
+              type="button" 
+              className="btn btn-teal"
+              onClick={() => {
+                onRefresh();
+              }}
+              disabled={loading}
+            >
+              {loading ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                  Refreshing...
+                </>
+              ) : (
+                'Refresh'
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
 
 // Pagination Controls Component (Fixed - No Page Size Selector)
 const PaginationControls = React.memo(({ 
@@ -538,6 +890,9 @@ const App = () => {
   const [userAppointments, setUserAppointments] = useState([]);
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   
+  // NEW: My Appointments modal state
+  const [showMyAppointments, setShowMyAppointments] = useState(false);
+  
   // Auth popup states
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authStep, setAuthStep] = useState('mobile');
@@ -730,9 +1085,8 @@ const App = () => {
     try {
       const result = await appointmentsAPI.getMyAppointments();
       if (result.success) {
-        // Filter for scheduled appointments only
-        const scheduledAppointments = result.data.filter(apt => apt.status === 'scheduled');
-        setUserAppointments(scheduledAppointments);
+        // Keep all appointments (scheduled, completed, canceled)
+        setUserAppointments(result.data);
       }
     } catch (error) {
       console.error('Error loading user appointments:', error);
@@ -836,6 +1190,13 @@ const App = () => {
     });
     setIsLoading(false);
   }, []);
+
+  // NEW: Handle My Appointments click
+  const handleMyAppointments = useCallback(() => {
+    setShowAuthDropdown(false);
+    setShowMyAppointments(true);
+    loadUserAppointments(); // Refresh appointments when opening
+  }, [loadUserAppointments]);
 
   const handleShowDoctorDetails = useCallback((doctorId) => {
     setShowDoctorModal(doctorId);
@@ -1348,7 +1709,12 @@ const App = () => {
                       {showAuthDropdown && (
                         <div className="dropdown-menu show position-absolute end-0 mt-1 shadow">
                           <button className="dropdown-item">Profile</button>
-                          <button className="dropdown-item">My Appointments</button>
+                          <button 
+                            className="dropdown-item"
+                            onClick={handleMyAppointments}
+                          >
+                            My Appointments
+                          </button>
                           <div className="dropdown-divider"></div>
                           <button 
                             className="dropdown-item text-danger" 
@@ -1576,6 +1942,15 @@ const App = () => {
           </div>
         </div>
       </footer>
+
+      {/* My Appointments Modal */}
+      <MyAppointmentsModal
+        show={showMyAppointments}
+        onClose={() => setShowMyAppointments(false)}
+        appointments={userAppointments}
+        loading={loadingAppointments}
+        onRefresh={loadUserAppointments}
+      />
 
       {/* Auth Modal */}
       {showAuthModal && (
