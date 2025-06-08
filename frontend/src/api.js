@@ -1,4 +1,4 @@
-// api.js - Updated with pagination support
+// api.js - Fixed version with proper token handling
 import axios from 'axios';
 
 // API Base Configuration
@@ -12,45 +12,78 @@ const api = axios.create({
   },
 });
 
-// Token management
-const getAccessToken = () => localStorage.getItem('access_token');
-const getRefreshToken = () => localStorage.getItem('refresh_token');
-const setTokens = (accessToken, refreshToken) => {
-  localStorage.setItem('access_token', accessToken);
-  localStorage.setItem('refresh_token', refreshToken);
+// Token management with validation
+const getAccessToken = () => {
+  const token = localStorage.getItem('access_token');
+  // Return null if token is invalid/empty
+  if (!token || token === 'null' || token === 'undefined' || token.trim() === '') {
+    return null;
+  }
+  return token;
 };
+
+const getRefreshToken = () => {
+  const token = localStorage.getItem('refresh_token');
+  if (!token || token === 'null' || token === 'undefined' || token.trim() === '') {
+    return null;
+  }
+  return token;
+};
+
+const setTokens = (accessToken, refreshToken) => {
+  if (accessToken && accessToken !== 'null' && accessToken !== 'undefined') {
+    localStorage.setItem('access_token', accessToken);
+  }
+  if (refreshToken && refreshToken !== 'null' && refreshToken !== 'undefined') {
+    localStorage.setItem('refresh_token', refreshToken);
+  }
+};
+
 const clearTokens = () => {
   localStorage.removeItem('access_token');
   localStorage.removeItem('refresh_token');
   localStorage.removeItem('user_data');
 };
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token ONLY if valid
 api.interceptors.request.use(
   (config) => {
-    console.log('🔍 Axios request config:', config); // Debug the full request
-    console.log('🔍 Request data:', config.data); // Debug the request body
-    console.log('🔍 Request headers:', config.headers); // Debug headers
+    console.log('🔍 Making API request to:', config.url);
     
     const token = getAccessToken();
+    
+    // ONLY add Authorization header if we have a valid token
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+      console.log('🔑 Added valid token to request');
+    } else {
+      // Make sure no Authorization header is sent for public endpoints
+      delete config.headers.Authorization;
+      console.log('🔓 No token - making public request');
     }
+    
     return config;
   },
   (error) => {
+    console.error('❌ Request interceptor error:', error);
     return Promise.reject(error);
   }
 );
 
 // Response interceptor to handle token refresh
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    console.log('✅ API response received:', response.status);
+    return response;
+  },
   async (error) => {
+    console.error('❌ API error:', error.response?.status, error.response?.data);
+    
     const originalRequest = error.config;
 
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
+      console.log('🔄 Attempting token refresh...');
 
       try {
         const refreshToken = getRefreshToken();
@@ -61,15 +94,18 @@ api.interceptors.response.use(
 
           const { access } = response.data;
           localStorage.setItem('access_token', access);
+          console.log('✅ Token refreshed successfully');
 
           // Retry the original request with new token
           originalRequest.headers.Authorization = `Bearer ${access}`;
           return api(originalRequest);
+        } else {
+          console.log('❌ No refresh token available');
         }
       } catch (refreshError) {
-        // Refresh failed, clear tokens and redirect to login
+        console.error('❌ Token refresh failed:', refreshError);
+        // Refresh failed, clear tokens and let the user re-login
         clearTokens();
-        window.location.reload();
       }
     }
 
@@ -77,7 +113,7 @@ api.interceptors.response.use(
   }
 );
 
-// Authentication API calls (unchanged)
+// Authentication API calls (updated with better error handling)
 export const authAPI = {
   // Register new user
   register: async (userData) => {
@@ -246,7 +282,8 @@ export const authAPI = {
   },
 };
 
-// 🆕 UPDATED: Doctors API calls with pagination support
+// Update in frontend/src/api.js - Replace the existing getBySpecialty function
+
 export const doctorsAPI = {
   // Get all doctors with pagination
   getAll: async (page = 1, pageSize = 10) => {
@@ -279,9 +316,11 @@ export const doctorsAPI = {
     }
   },
 
-  // Get doctors by specialty with pagination
+  // UPDATED: Get doctors by specialty with proper pagination
   getBySpecialty: async (specialtyId, page = 1, pageSize = 10) => {
     try {
+      console.log(`🔍 Fetching doctors for specialty ${specialtyId}, page ${page}, pageSize ${pageSize}`);
+      
       const response = await api.get(`/doctors/by-specialty/${specialtyId}/`, {
         params: {
           page,
@@ -289,8 +328,10 @@ export const doctorsAPI = {
         }
       });
       
-      // Handle both paginated and non-paginated responses
-      if (response.data.results) {
+      console.log('📋 Specialty API response:', response.data);
+      
+      // Handle paginated response (this should be the standard now)
+      if (response.data.results !== undefined) {
         // Paginated response
         return { 
           success: true, 
@@ -305,7 +346,8 @@ export const doctorsAPI = {
           }
         };
       } else {
-        // Non-paginated response (convert to paginated format)
+        // Fallback for non-paginated response (shouldn't happen with new backend)
+        console.warn('⚠️ Received non-paginated response for specialty filter');
         const results = Array.isArray(response.data) ? response.data : [response.data];
         return { 
           success: true, 
@@ -314,13 +356,14 @@ export const doctorsAPI = {
             count: results.length,
             next: null,
             previous: null,
-            total_pages: 1,
+            total_pages: Math.ceil(results.length / pageSize),
             current_page: 1,
-            page_size: pageSize  // Keep the requested page size, not results.length
+            page_size: pageSize
           }
         };
       }
     } catch (error) {
+      console.error('❌ Error fetching doctors by specialty:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Failed to fetch doctors by specialty',
@@ -355,13 +398,14 @@ export const doctorsAPI = {
   },
 };
 
-// Specialties API calls (unchanged)
+// Specialties API calls
 export const specialtiesAPI = {
   getAll: async () => {
     try {
       const response = await api.get('/specialties/');
       return { success: true, data: response.data };
     } catch (error) {
+      console.error('❌ Error loading specialties:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Failed to fetch specialties',
@@ -370,7 +414,7 @@ export const specialtiesAPI = {
   },
 };
 
-// Appointments API calls (unchanged)
+// Appointments API calls
 export const appointmentsAPI = {
   // Get user's appointments
   getMyAppointments: async () => {
@@ -378,6 +422,7 @@ export const appointmentsAPI = {
       const response = await api.get('/appointment/my-appointments/');
       return { success: true, data: response.data };
     } catch (error) {
+      console.error('❌ Error loading appointments:', error);
       return {
         success: false,
         error: error.response?.data?.message || 'Failed to fetch appointments',
@@ -385,13 +430,13 @@ export const appointmentsAPI = {
     }
   },
 
-  // UPDATED: Enhanced book appointment with better error handling
+  // Enhanced book appointment with better error handling
   book: async (doctorId, appointmentData) => {
     try {
       const response = await api.post(`/appointment/book/${doctorId}/`, appointmentData);
       return { success: true, data: response.data };
     } catch (error) {
-      console.error('Booking error details:', error.response);
+      console.error('❌ Booking error details:', error.response);
       
       let errorDetails = 'Failed to book appointment';
       
@@ -403,7 +448,7 @@ export const appointmentsAPI = {
           return {
             success: false,
             error: {
-              message: errorData.message,
+              message: errorData.error || errorData.message,
               error_code: errorData.error_code
             }
           };
@@ -432,9 +477,10 @@ export const appointmentsAPI = {
       const response = await api.post(`/appointment/cancel/${appointmentId}/`);
       return { success: true, data: response.data };
     } catch (error) {
+      console.error('❌ Error canceling appointment:', error);
       return {
         success: false,
-        error: error.response?.data?.message || 'Failed to cancel appointment',
+        error: error.response?.data?.message || error.response?.data?.error || 'Failed to cancel appointment',
       };
     }
   },
