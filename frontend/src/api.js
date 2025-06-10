@@ -115,7 +115,7 @@ api.interceptors.response.use(
 
 // Authentication API calls (updated with better error handling)
 export const authAPI = {
-  // Register new user
+  // Register new user (updated to include mobile number)
   register: async (userData) => {
     try {
       // Create unique username to avoid conflicts
@@ -126,6 +126,8 @@ export const authAPI = {
         password: userData.password, // Use user-provided password
         first_name: userData.name.split(' ')[0] || userData.name,
         last_name: userData.name.split(' ').slice(1).join(' ') || '',
+        mobile_number: userData.mobileNumber, // Add mobile number
+        date_of_birth: userData.dateOfBirth
       };
 
       console.log('🚀 Sending registration data:', registrationData);
@@ -180,7 +182,7 @@ export const authAPI = {
     }
   },
 
-  // Login existing user
+  // Login existing user (email-based)
   login: async (userData) => {
     try {
       const loginData = {
@@ -202,6 +204,7 @@ export const authAPI = {
         ...response.data,
         name: response.data.first_name + ' ' + response.data.last_name,
         email: userData.email,
+        loginMethod: 'email'
       }));
 
       return { success: true, data: response.data };
@@ -220,6 +223,74 @@ export const authAPI = {
         } else if (errorData.non_field_errors) {
           errorMessage = errorData.non_field_errors[0];
         }
+      }
+      
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  },
+
+  // NEW: Send OTP for mobile login
+  sendOTP: async (mobileNumber) => {
+    try {
+      console.log('📱 Sending OTP to:', mobileNumber);
+
+      const response = await api.post('/send-otp/', {
+        mobile_number: mobileNumber
+      });
+
+      console.log('✅ OTP sent successfully:', response.data);
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('❌ Send OTP error:', error);
+      
+      let errorMessage = 'Failed to send OTP. Please try again.';
+      
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      }
+      
+      return {
+        success: false,
+        error: errorMessage,
+      };
+    }
+  },
+
+  // NEW: Verify OTP and login
+  verifyOTPLogin: async (mobileNumber, otp) => {
+    try {
+      console.log('🔐 Verifying OTP for mobile:', mobileNumber);
+
+      const response = await api.post('/verify-otp-login/', {
+        mobile_number: mobileNumber,
+        otp: otp
+      });
+
+      console.log('✅ OTP verification successful:', response.data);
+
+      const { access, refresh } = response.data;
+      setTokens(access, refresh);
+
+      // Store user data
+      localStorage.setItem('user_data', JSON.stringify({
+        ...response.data,
+        name: response.data.first_name + ' ' + response.data.last_name,
+        mobileNumber: mobileNumber,
+        loginMethod: 'mobile'
+      }));
+
+      return { success: true, data: response.data };
+    } catch (error) {
+      console.error('❌ OTP verification error:', error);
+      
+      let errorMessage = 'OTP verification failed. Please try again.';
+      
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
       }
       
       return {
@@ -281,8 +352,6 @@ export const authAPI = {
     }
   },
 };
-
-// Update in frontend/src/api.js - Replace the existing getBySpecialty function
 
 export const doctorsAPI = {
   // Get all doctors with pagination

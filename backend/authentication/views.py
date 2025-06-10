@@ -10,6 +10,8 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from datetime import datetime, timedelta
+from django.db import transaction
+import re
 
 from .models import (
     Doctor, DoctorSchedule, Specialty, Language, TimeSlot,
@@ -46,9 +48,33 @@ class RegisterView(generics.CreateAPIView):
     permission_classes = [AllowAny]
     
     def post(self, request, *args, **kwargs):
+        logger.info(f"📝 Registration attempt with data: {request.data}")
+        
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        user = serializer.save()
+        
+        # Extract mobile number and other profile data from request
+        mobile_number = request.data.get('mobile_number', '').strip()
+        date_of_birth = request.data.get('date_of_birth', '2000-01-01')
+        
+        # Create user and patient profile in a transaction
+        with transaction.atomic():
+            # Create user
+            user = serializer.save()
+            
+            # Create patient profile with mobile number
+            patient_data = {
+                'user': user,
+                'first_name': user.first_name or 'Unknown',
+                'last_name': user.last_name or 'User',
+                'date_of_birth': date_of_birth,
+                'phone_number': mobile_number,  # Store mobile number here
+                'address': ''
+            }
+            
+            Patient.objects.create(**patient_data)
+            
+            logger.info(f"✅ User and patient profile created for: {user.email}")
         
         # Create JWT tokens
         refresh = RefreshToken.for_user(user)
@@ -57,7 +83,8 @@ class RegisterView(generics.CreateAPIView):
         return Response({
             "user": UserSerializer(user).data,
             "refresh": str(refresh),
-            "access": str(access_token)
+            "access": str(access_token),
+            "mobile_number": mobile_number
         }, status=status.HTTP_201_CREATED)
 
 class LoginView(APIView):
@@ -567,3 +594,103 @@ class CancelAppointmentView(APIView):
             'message': 'Appointment canceled successfully',
             'canceled_at_ist': now_ist.strftime('%Y-%m-%d %H:%M:%S IST')
         }, status=status.HTTP_200_OK)
+    
+class SendOTPView(APIView):
+    """Send OTP for mobile login"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        mobile_number = request.data.get('mobile_number', '').strip()
+        
+        if not mobile_number:
+            return Response({
+                'error': 'Mobile number is required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate mobile number format (10 digits)
+        if not re.match(r'^\d{10}$', mobile_number):
+            return Response({
+                'error': 'Please enter a valid 10-digit mobile number'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Check if user exists with this mobile number
+        try:
+            # Look for patient with this mobile number
+            patient = Patient.objects.select_related('user').get(
+                phone_number=mobile_number
+            )
+            
+            if not patient.user or not patient.user.is_active:
+                return Response({
+                    'error': 'No active account found with this mobile number'
+                }, status=status.HTTP_404_NOT_FOUND)
+            
+            logger.info(f"📱 OTP requested for mobile: {mobile_number}")
+            
+            # For demo purposes, always return success
+            # In production, you would integrate with SMS service
+            return Response({
+                'message': 'OTP sent successfully',
+                'mobile_number': mobile_number,
+                'demo_otp': '111'  # For demo purposes only
+            }, status=status.HTTP_200_OK)
+            
+        except Patient.DoesNotExist:
+            return Response({
+                'error': 'No account found with this mobile number. Please register first.'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+class VerifyOTPLoginView(APIView):
+    """Verify OTP and login user"""
+    permission_classes = [AllowAny]
+    
+    def post(self, request):
+        mobile_number = request.data.get('mobile_number', '').strip()
+        otp = request.data.get('otp', '').strip()
+        
+        if not mobile_number or not otp:
+            return Response({
+                'error': 'Mobile number and OTP are required'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Validate OTP (hardcoded as 111 for demo)
+        if otp != '111':
+            return Response({
+                'error': 'Invalid OTP. Please try again.'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            # Find patient with this mobile number
+            patient = Patient.objects.select_related('user').get(
+                phone_number=mobile_number
+            )
+            
+            user = patient.user
+            
+            if not user or not user.is_active:
+                return Response({
+                    'error': 'Account is not active'
+                }, status=status.HTTP_401_UNAUTHORIZED)
+            
+            # Create JWT tokens
+            refresh = RefreshToken.for_user(user)
+            access_token = refresh.access_token
+            
+            logger.info(f"✅ Mobile login successful for: {mobile_number}")
+            
+            return Response({
+                'refresh': str(refresh),
+                'access': str(access_token),
+                'user_id': user.id,
+                'email': user.email,
+                'username': user.username,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+                'mobile_number': mobile_number,
+                'login_method': 'mobile'
+            }, status=status.HTTP_200_OK)
+            
+        except Patient.DoesNotExist:
+            return Response({
+                'error': 'No account found with this mobile number'
+            }, status=status.HTTP_404_NOT_FOUND)

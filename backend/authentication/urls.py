@@ -28,6 +28,10 @@ urlpatterns = [
     path('profile/', views.UserProfileView.as_view(), name='profile'),
     path('change-password/', views.ChangePasswordView.as_view(), name='change-password'),
     
+    # NEW: Mobile login endpoints
+    path('send-otp/', views.SendOTPView.as_view(), name='send-otp'),
+    path('verify-otp-login/', views.VerifyOTPLoginView.as_view(), name='verify-otp-login'),
+    
     # Doctor specific URLs
     path('doctors/by-specialty/<int:specialty_id>/', views.DoctorsBySpecialtyView.as_view(), name='doctors-by-specialty'),
     path('doctors/<int:doctor_id>/available-slots/', views.AvailableSlotsView.as_view(), name='available-slots'),
