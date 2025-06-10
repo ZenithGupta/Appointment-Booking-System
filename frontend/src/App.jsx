@@ -897,13 +897,17 @@ const App = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
   const [authStep, setAuthStep] = useState('mobile');
   const [authMode, setAuthMode] = useState('login');
+  const [loginMethod, setLoginMethod] = useState('email');
+  const [mobileLoginStep, setMobileLoginStep] = useState('mobile');
   const [userFormData, setUserFormData] = useState({
     mobileNumber: '',
     otp: '',
     name: '',
     email: '',
     password: '',
-    dateOfBirth: ''
+    dateOfBirth: '',
+    loginMobile: '',
+    loginOTP: ''
   });
   const [formErrors, setFormErrors] = useState({});
   const [userName, setUserName] = useState('');
@@ -1491,6 +1495,25 @@ const App = () => {
     }
     return errors;
   };
+  const validateMobileLogin = () => {
+  const errors = {};
+  if (!userFormData.loginMobile.trim()) {
+    errors.loginMobile = 'Mobile number is required';
+  } else if (!/^\d{10}$/.test(userFormData.loginMobile.replace(/\s/g, ''))) {
+    errors.loginMobile = 'Please enter a valid 10-digit mobile number';
+  }
+  return errors;
+};
+
+const validateOTPLogin = () => {
+  const errors = {};
+  if (!userFormData.loginOTP.trim()) {
+    errors.loginOTP = 'OTP is required';
+  } else if (userFormData.loginOTP !== '111') {
+    errors.loginOTP = 'Invalid OTP. Please enter 111';
+  }
+  return errors;
+};
 
   // Form handlers
   const handleMobileSubmit = useCallback(async (e) => {
@@ -1623,19 +1646,103 @@ const App = () => {
     }
   }, [formErrors]);
 
-  const closeAuthModal = useCallback(() => {
-    setShowAuthModal(false);
-    setAuthStep('mobile');
-    setFormErrors({});
-    setUserFormData({
-      mobileNumber: '',
-      otp: '',
-      name: '',
-      email: '',
-      password: '',
-      dateOfBirth: ''
+  const handleMobileLoginSubmit = useCallback(async (e) => {
+  e.preventDefault();
+  
+  const errors = validateMobileLogin();
+  if (Object.keys(errors).length > 0) {
+    setFormErrors(errors);
+    return;
+  }
+  
+  setIsLoading(true);
+  setFormErrors({});
+  
+  try {
+    const result = await authAPI.sendOTP(userFormData.loginMobile);
+    
+    if (result.success) {
+      setMobileLoginStep('otp');
+      setFormErrors({});
+    } else {
+      setFormErrors({ 
+        loginMobile: result.error 
+      });
+    }
+  } catch (error) {
+    setFormErrors({ 
+      loginMobile: 'Network error. Please check your connection and try again.' 
     });
-  }, []);
+  } finally {
+    setIsLoading(false);
+  }
+}, [userFormData.loginMobile]);
+
+const handleOTPLoginSubmit = useCallback(async (e) => {
+  e.preventDefault();
+  
+  const errors = validateOTPLogin();
+  if (Object.keys(errors).length > 0) {
+    setFormErrors(errors);
+    return;
+  }
+  
+  setIsLoading(true);
+  setFormErrors({});
+  
+  try {
+    const result = await authAPI.verifyOTPLogin(userFormData.loginMobile, userFormData.loginOTP);
+    
+    if (result.success) {
+      const userData = authAPI.getUserData();
+      setIsLoggedIn(true);
+      setUserName(userData?.name || userData?.first_name || 'User');
+      setShowAuthModal(false);
+      setAuthStep('login-form');
+      setLoginMethod('email');
+      setMobileLoginStep('mobile');
+      setUserFormData({
+        mobileNumber: '',
+        otp: '',
+        name: '',
+        email: '',
+        password: '',
+        dateOfBirth: '',
+        loginMobile: '',
+        loginOTP: ''
+      });
+      setFormErrors({});
+    } else {
+      setFormErrors({ 
+        loginOTP: result.error 
+      });
+    }
+  } catch (error) {
+    setFormErrors({ 
+      loginOTP: 'Network error. Please check your connection and try again.' 
+    });
+  } finally {
+    setIsLoading(false);
+  }
+}, [userFormData.loginMobile, userFormData.loginOTP]);
+
+  const closeAuthModal = useCallback(() => {
+  setShowAuthModal(false);
+  setAuthStep('mobile');
+  setLoginMethod('email');
+  setMobileLoginStep('mobile');
+  setFormErrors({});
+  setUserFormData({
+    mobileNumber: '',
+    otp: '',
+    name: '',
+    email: '',
+    password: '',
+    dateOfBirth: '',
+    loginMobile: '',
+    loginOTP: ''
+  });
+}, []);
 
   if (loading) {
     return (
@@ -1974,258 +2081,371 @@ const App = () => {
                   onClick={closeAuthModal}
                 ></button>
               </div>
-              <div className="modal-body">
-                {authStep === 'login-form' ? (
-                  <form onSubmit={handleLoginSubmit}>
-                    {formErrors.general && (
-                      <div className="alert alert-danger" role="alert">
-                        {formErrors.general}
-                      </div>
-                    )}
-                    
-                    <div className="mb-3">
-                      <label htmlFor="loginEmail" className="form-label">Email Address *</label>
-                      <input
-                        type="email"
-                        className={`form-control ${formErrors.email ? 'is-invalid' : ''}`}
-                        id="loginEmail"
-                        value={userFormData.email}
-                        onChange={(e) => handleInputChange('email', e.target.value)}
-                        placeholder="Enter your email address"
-                        disabled={isLoading}
-                      />
-                      {formErrors.email && (
-                        <div className="invalid-feedback">{formErrors.email}</div>
-                      )}
-                    </div>
-                    
-                    <div className="mb-3">
-                      <label htmlFor="loginPassword" className="form-label">Password *</label>
-                      <input
-                        type="password"
-                        className={`form-control ${formErrors.password ? 'is-invalid' : ''}`}
-                        id="loginPassword"
-                        value={userFormData.password}
-                        onChange={(e) => handleInputChange('password', e.target.value)}
-                        placeholder="Enter your password"
-                        disabled={isLoading}
-                      />
-                      {formErrors.password && (
-                        <div className="invalid-feedback">{formErrors.password}</div>
-                      )}
-                    </div>
-                    
-                    <div className="d-grid">
-                      <button type="submit" className="btn btn-teal" disabled={isLoading}>
-                        {isLoading ? (
-                          <>
-                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                            Logging in...
-                          </>
-                        ) : (
-                          'Login'
-                        )}
-                      </button>
-                    </div>
-                  </form>
-                ) : authStep === 'mobile' ? (
-                  <form onSubmit={handleMobileSubmit}>
-                    {formErrors.general && (
-                      <div className="alert alert-danger" role="alert">
-                        {formErrors.general}
-                      </div>
-                    )}
-                    
-                    <div className="mb-3">
-                      <label htmlFor="mobileNumber" className="form-label">Mobile Number *</label>
-                      <input
-                        type="tel"
-                        className={`form-control ${formErrors.mobileNumber ? 'is-invalid' : ''}`}
-                        id="mobileNumber"
-                        value={userFormData.mobileNumber}
-                        onChange={(e) => handleInputChange('mobileNumber', e.target.value)}
-                        placeholder="Enter 10-digit mobile number"
-                        maxLength="10"
-                        disabled={isLoading}
-                      />
-                      {formErrors.mobileNumber && (
-                        <div className="invalid-feedback">{formErrors.mobileNumber}</div>
-                      )}
-                    </div>
-                    
-                    <div className="d-grid">
-                      <button type="submit" className="btn btn-teal" disabled={isLoading}>
-                        {isLoading ? (
-                          <>
-                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                            Sending OTP...
-                          </>
-                        ) : (
-                          'Send OTP'
-                        )}
-                      </button>
-                    </div>
-                  </form>
-                ) : authStep === 'otp' ? (
-                  <form onSubmit={handleOtpSubmit}>
-                    <div className="text-center mb-4">
-                      <div className="alert alert-info">
-                        <strong>OTP sent to:</strong> {userFormData.mobileNumber}
-                        <br />
-                        <small>For demo purposes, enter: <strong>111</strong></small>
-                      </div>
-                    </div>
-                    
-                    <div className="mb-3">
-                      <label htmlFor="otp" className="form-label">Enter OTP *</label>
-                      <input
-                        type="text"
-                        className={`form-control text-center ${formErrors.otp ? 'is-invalid' : ''}`}
-                        id="otp"
-                        value={userFormData.otp}
-                        onChange={(e) => handleInputChange('otp', e.target.value)}
-                        placeholder="Enter 3-digit OTP"
-                        maxLength="3"
-                        style={{ fontSize: '1.5rem', letterSpacing: '0.5rem' }}
-                      />
-                      {formErrors.otp && (
-                        <div className="invalid-feedback">{formErrors.otp}</div>
-                      )}
-                    </div>
-                    
-                    <div className="d-grid gap-2">
-                      <button type="submit" className="btn btn-lime">
-                        Verify OTP
-                      </button>
-                      <button 
-                        type="button" 
-                        className="btn btn-outline-secondary"
-                        onClick={() => setAuthStep('mobile')}
-                      >
-                        Back to Mobile
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <form onSubmit={handleProfileSubmit}>
-                    {formErrors.general && (
-                      <div className="alert alert-danger" role="alert">
-                        {formErrors.general}
-                      </div>
-                    )}
-                    
-                    <div className="mb-3">
-                      <label htmlFor="name" className="form-label">Full Name *</label>
-                      <input
-                        type="text"
-                        className={`form-control ${formErrors.name ? 'is-invalid' : ''}`}
-                        id="name"
-                        value={userFormData.name}
-                        onChange={(e) => handleInputChange('name', e.target.value)}
-                        placeholder="Enter your full name"
-                        disabled={isLoading}
-                      />
-                      {formErrors.name && (
-                        <div className="invalid-feedback">{formErrors.name}</div>
-                      )}
-                    </div>
-                    
-                    <div className="mb-3">
-                      <label htmlFor="email" className="form-label">Email Address *</label>
-                      <input
-                        type="email"
-                        className={`form-control ${formErrors.email ? 'is-invalid' : ''}`}
-                        id="email"
-                        value={userFormData.email}
-                        onChange={(e) => handleInputChange('email', e.target.value)}
-                        placeholder="Enter your email address"
-                        disabled={isLoading}
-                      />
-                      {formErrors.email && (
-                        <div className="invalid-feedback">{formErrors.email}</div>
-                      )}
-                    </div>
-                    
-                    <div className="mb-3">
-                      <label htmlFor="password" className="form-label">Create Password *</label>
-                      <input
-                        type="password"
-                        className={`form-control ${formErrors.password ? 'is-invalid' : ''}`}
-                        id="password"
-                        value={userFormData.password}
-                        onChange={(e) => handleInputChange('password', e.target.value)}
-                        placeholder="Create a strong password (min 6 characters)"
-                        disabled={isLoading}
-                      />
-                      {formErrors.password && (
-                        <div className="invalid-feedback">{formErrors.password}</div>
-                      )}
-                    </div>
-                    
-                    <div className="mb-3">
-                      <label htmlFor="dateOfBirth" className="form-label">Date of Birth *</label>
-                      <input
-                        type="date"
-                        className={`form-control ${formErrors.dateOfBirth ? 'is-invalid' : ''}`}
-                        id="dateOfBirth"
-                        value={userFormData.dateOfBirth}
-                        onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
-                        max={new Date().toISOString().split('T')[0]}
-                        disabled={isLoading}
-                      />
-                      {formErrors.dateOfBirth && (
-                        <div className="invalid-feedback">{formErrors.dateOfBirth}</div>
-                      )}
-                    </div>
-                    
-                    <div className="d-grid gap-2">
-                      <button type="submit" className="btn btn-lime" disabled={isLoading}>
-                        {isLoading ? (
-                          <>
-                            <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                            Creating Account...
-                          </>
-                        ) : (
-                          'Complete Registration'
-                        )}
-                      </button>
-                      <button 
-                        type="button" 
-                        className="btn btn-outline-secondary"
-                        onClick={() => setAuthStep('otp')}
-                        disabled={isLoading}
-                      >
-                        Back to OTP
-                      </button>
-                    </div>
-                  </form>
+
+<div className="modal-body">
+  {authStep === 'login-form' ? (
+    <>
+      {/* Login Method Toggle */}
+      <div className="mb-4">
+        <div className="btn-group w-100" role="group">
+          <input 
+            type="radio" 
+            className="btn-check" 
+            name="loginMethod" 
+            id="emailLogin" 
+            autoComplete="off" 
+            checked={loginMethod === 'email'}
+            onChange={() => {
+              setLoginMethod('email');
+              setFormErrors({});
+            }}
+          />
+          <label className="btn btn-outline-primary" htmlFor="emailLogin">
+            📧 Email Login
+          </label>
+
+          <input 
+            type="radio" 
+            className="btn-check" 
+            name="loginMethod" 
+            id="mobileLogin" 
+            autoComplete="off" 
+            checked={loginMethod === 'mobile'}
+            onChange={() => {
+              setLoginMethod('mobile');
+              setMobileLoginStep('mobile');
+              setFormErrors({});
+            }}
+          />
+          <label className="btn btn-outline-primary" htmlFor="mobileLogin">
+            📱 Mobile Login
+          </label>
+        </div>
+      </div>
+
+      {/* Email Login Form */}
+      {loginMethod === 'email' && (
+        <form onSubmit={handleLoginSubmit}>
+          {formErrors.general && (
+            <div className="alert alert-danger" role="alert">
+              {formErrors.general}
+            </div>
+          )}
+          
+          <div className="mb-3">
+            <label htmlFor="loginEmail" className="form-label">Email Address *</label>
+            <input
+              type="email"
+              className={`form-control ${formErrors.email ? 'is-invalid' : ''}`}
+              id="loginEmail"
+              value={userFormData.email}
+              onChange={(e) => handleInputChange('email', e.target.value)}
+              placeholder="Enter your email address"
+              disabled={isLoading}
+            />
+            {formErrors.email && (
+              <div className="invalid-feedback">{formErrors.email}</div>
+            )}
+          </div>
+          
+          <div className="mb-3">
+            <label htmlFor="loginPassword" className="form-label">Password *</label>
+            <input
+              type="password"
+              className={`form-control ${formErrors.password ? 'is-invalid' : ''}`}
+              id="loginPassword"
+              value={userFormData.password}
+              onChange={(e) => handleInputChange('password', e.target.value)}
+              placeholder="Enter your password"
+              disabled={isLoading}
+            />
+            {formErrors.password && (
+              <div className="invalid-feedback">{formErrors.password}</div>
+            )}
+          </div>
+          
+          <div className="d-grid">
+            <button type="submit" className="btn btn-teal" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                  Logging in...
+                </>
+              ) : (
+                'Login with Email'
+              )}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Mobile Login Form */}
+      {loginMethod === 'mobile' && (
+        <>
+          {mobileLoginStep === 'mobile' ? (
+            <form onSubmit={handleMobileLoginSubmit}>
+              {formErrors.general && (
+                <div className="alert alert-danger" role="alert">
+                  {formErrors.general}
+                </div>
+              )}
+              
+              <div className="mb-3">
+                <label htmlFor="loginMobile" className="form-label">Mobile Number *</label>
+                <input
+                  type="tel"
+                  className={`form-control ${formErrors.loginMobile ? 'is-invalid' : ''}`}
+                  id="loginMobile"
+                  value={userFormData.loginMobile}
+                  onChange={(e) => handleInputChange('loginMobile', e.target.value)}
+                  placeholder="Enter 10-digit mobile number"
+                  maxLength="10"
+                  disabled={isLoading}
+                />
+                {formErrors.loginMobile && (
+                  <div className="invalid-feedback">{formErrors.loginMobile}</div>
                 )}
               </div>
+              
+              <div className="d-grid">
+                <button type="submit" className="btn btn-teal" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                      Sending OTP...
+                    </>
+                  ) : (
+                    'Send OTP'
+                  )}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <form onSubmit={handleOTPLoginSubmit}>
+              <div className="text-center mb-4">
+                <div className="alert alert-info">
+                  <strong>OTP sent to:</strong> {userFormData.loginMobile}
+                  <br />
+                  <small>For demo purposes, enter: <strong>111</strong></small>
+                </div>
+              </div>
+              
+              <div className="mb-3">
+                <label htmlFor="loginOTP" className="form-label">Enter OTP *</label>
+                <input
+                  type="text"
+                  className={`form-control text-center ${formErrors.loginOTP ? 'is-invalid' : ''}`}
+                  id="loginOTP"
+                  value={userFormData.loginOTP}
+                  onChange={(e) => handleInputChange('loginOTP', e.target.value)}
+                  placeholder="Enter 3-digit OTP"
+                  maxLength="3"
+                  style={{ fontSize: '1.5rem', letterSpacing: '0.5rem' }}
+                />
+                {formErrors.loginOTP && (
+                  <div className="invalid-feedback">{formErrors.loginOTP}</div>
+                )}
+              </div>
+              
+              <div className="d-grid gap-2">
+                <button type="submit" className="btn btn-lime" disabled={isLoading}>
+                  {isLoading ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                      Verifying...
+                    </>
+                  ) : (
+                    'Verify OTP & Login'
+                  )}
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-outline-secondary"
+                  onClick={() => {
+                    setMobileLoginStep('mobile');
+                    setFormErrors({});
+                  }}
+                  disabled={isLoading}
+                >
+                  Back to Mobile
+                </button>
+              </div>
+            </form>
+          )}
+        </>
+      )}
+    </>
+  ) : authStep === 'mobile' ? (
+    // Registration mobile step (unchanged)
+    <form onSubmit={handleMobileSubmit}>
+      {formErrors.general && (
+        <div className="alert alert-danger" role="alert">
+          {formErrors.general}
+        </div>
+      )}
+      
+      <div className="mb-3">
+        <label htmlFor="mobileNumber" className="form-label">Mobile Number *</label>
+        <input
+          type="tel"
+          className={`form-control ${formErrors.mobileNumber ? 'is-invalid' : ''}`}
+          id="mobileNumber"
+          value={userFormData.mobileNumber}
+          onChange={(e) => handleInputChange('mobileNumber', e.target.value)}
+          placeholder="Enter 10-digit mobile number"
+          maxLength="10"
+          disabled={isLoading}
+        />
+        {formErrors.mobileNumber && (
+          <div className="invalid-feedback">{formErrors.mobileNumber}</div>
+        )}
+      </div>
+      
+      <div className="d-grid">
+        <button type="submit" className="btn btn-teal" disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+              Sending OTP...
+            </>
+          ) : (
+            'Send OTP'
+          )}
+        </button>
+      </div>
+    </form>
+  ) : authStep === 'otp' ? (
+    // Registration OTP step (unchanged)
+    <form onSubmit={handleOtpSubmit}>
+      <div className="text-center mb-4">
+        <div className="alert alert-info">
+          <strong>OTP sent to:</strong> {userFormData.mobileNumber}
+          <br />
+          <small>For demo purposes, enter: <strong>111</strong></small>
+        </div>
+      </div>
+      
+      <div className="mb-3">
+        <label htmlFor="otp" className="form-label">Enter OTP *</label>
+        <input
+          type="text"
+          className={`form-control text-center ${formErrors.otp ? 'is-invalid' : ''}`}
+          id="otp"
+          value={userFormData.otp}
+          onChange={(e) => handleInputChange('otp', e.target.value)}
+          placeholder="Enter 3-digit OTP"
+          maxLength="3"
+          style={{ fontSize: '1.5rem', letterSpacing: '0.5rem' }}
+        />
+        {formErrors.otp && (
+          <div className="invalid-feedback">{formErrors.otp}</div>
+        )}
+      </div>
+      
+      <div className="d-grid gap-2">
+        <button type="submit" className="btn btn-lime">
+          Verify OTP
+        </button>
+        <button 
+          type="button" 
+          className="btn btn-outline-secondary"
+          onClick={() => setAuthStep('mobile')}
+        >
+          Back to Mobile
+        </button>
+      </div>
+    </form>
+  ) : (
+    // Registration profile step (unchanged)
+    <form onSubmit={handleProfileSubmit}>
+      {formErrors.general && (
+        <div className="alert alert-danger" role="alert">
+          {formErrors.general}
+        </div>
+      )}
+      
+      <div className="mb-3">
+        <label htmlFor="name" className="form-label">Full Name *</label>
+        <input
+          type="text"
+          className={`form-control ${formErrors.name ? 'is-invalid' : ''}`}
+          id="name"
+          value={userFormData.name}
+          onChange={(e) => handleInputChange('name', e.target.value)}
+          placeholder="Enter your full name"
+          disabled={isLoading}
+        />
+        {formErrors.name && (
+          <div className="invalid-feedback">{formErrors.name}</div>
+        )}
+      </div>
+      
+      <div className="mb-3">
+        <label htmlFor="email" className="form-label">Email Address *</label>
+        <input
+          type="email"
+          className={`form-control ${formErrors.email ? 'is-invalid' : ''}`}
+          id="email"
+          value={userFormData.email}
+          onChange={(e) => handleInputChange('email', e.target.value)}
+          placeholder="Enter your email address"
+          disabled={isLoading}
+        />
+        {formErrors.email && (
+          <div className="invalid-feedback">{formErrors.email}</div>
+        )}
+      </div>
+      
+      <div className="mb-3">
+        <label htmlFor="password" className="form-label">Create Password *</label>
+        <input
+          type="password"
+          className={`form-control ${formErrors.password ? 'is-invalid' : ''}`}
+          id="password"
+          value={userFormData.password}
+          onChange={(e) => handleInputChange('password', e.target.value)}
+          placeholder="Create a strong password (min 6 characters)"
+          disabled={isLoading}
+        />
+        {formErrors.password && (
+          <div className="invalid-feedback">{formErrors.password}</div>
+        )}
+      </div>
+      
+      <div className="mb-3">
+        <label htmlFor="dateOfBirth" className="form-label">Date of Birth *</label>
+        <input
+          type="date"
+          className={`form-control ${formErrors.dateOfBirth ? 'is-invalid' : ''}`}
+          id="dateOfBirth"
+          value={userFormData.dateOfBirth}
+          onChange={(e) => handleInputChange('dateOfBirth', e.target.value)}
+          max={new Date().toISOString().split('T')[0]}
+          disabled={isLoading}
+        />
+        {formErrors.dateOfBirth && (
+          <div className="invalid-feedback">{formErrors.dateOfBirth}</div>
+        )}
+      </div>
+      
+      <div className="d-grid gap-2">
+        <button type="submit" className="btn btn-lime" disabled={isLoading}>
+          {isLoading ? (
+            <>
+              <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+              Creating Account...
+            </>
+          ) : (
+            'Complete Registration'
+          )}
+        </button>
+      </div>
+    </form>
+  )}
+</div>
               <div className="modal-footer">
                 <div className="text-center w-100">
-                  {authStep === 'login-form' && (
-                    <small className="text-muted">
-                      Don't have an account? 
-                      <button 
-                        className="btn btn-link p-0 text-decoration-none ms-1"
-                        onClick={() => {
-                          setAuthMode('register');
-                          setAuthStep('mobile');
-                          setFormErrors({});
-                          setUserFormData({
-                            mobileNumber: '',
-                            otp: '',
-                            name: '',
-                            email: '',
-                            password: '',
-                            dateOfBirth: ''
-                          });
-                        }}
-                      >
-                        Register here
-                      </button>
-                    </small>
-                  )}
+                  
                   
                   {authStep === 'mobile' && (
                     <small className="text-muted">
