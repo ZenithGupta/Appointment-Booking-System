@@ -22,8 +22,6 @@ from .serializers import (
     SpecialtySerializer, LanguageSerializer, PatientSerializer,
     MedicalHistorySerializer, AppointmentSerializer, BookAppointmentSerializer
 )
-
-# 🔧 NEW: Import enhanced validation functions
 from .enhanced_validation import (
     get_current_ist_time,
     validate_not_in_past,
@@ -31,55 +29,51 @@ from .enhanced_validation import (
     log_security_attempt,
     get_client_ip
 )
-
 import logging
 logger = logging.getLogger(__name__)
 
 class CustomPagination(PageNumberPagination):
-        page_size = 10
-        page_size_query_param = 'page_size'
-        max_page_size = 100
+    page_size = 10
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
-
-# Authentication views (unchanged)
 class RegisterView(generics.CreateAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     permission_classes = [AllowAny]
-    
+
     def post(self, request, *args, **kwargs):
         logger.info(f"📝 Registration attempt with data: {request.data}")
         
+        mobile_number = request.data.get('mobile_number', '').strip()
+        
+        # MODIFIED: Add validation for mobile number uniqueness
+        if mobile_number and Patient.objects.filter(phone_number=mobile_number).exists():
+            return Response({
+                "error": "A user with this mobile number already exists."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        
-        # Extract mobile number and other profile data from request
-        mobile_number = request.data.get('mobile_number', '').strip()
+
         date_of_birth = request.data.get('date_of_birth', '2000-01-01')
-        
-        # Create user and patient profile in a transaction
+
         with transaction.atomic():
-            # Create user
             user = serializer.save()
-            
-            # Create patient profile with mobile number
             patient_data = {
                 'user': user,
                 'first_name': user.first_name or 'Unknown',
                 'last_name': user.last_name or 'User',
                 'date_of_birth': date_of_birth,
-                'phone_number': mobile_number,  # Store mobile number here
+                'phone_number': mobile_number,
                 'address': ''
             }
-            
             Patient.objects.create(**patient_data)
-            
             logger.info(f"✅ User and patient profile created for: {user.email}")
-        
-        # Create JWT tokens
+
         refresh = RefreshToken.for_user(user)
         access_token = refresh.access_token
-        
+
         return Response({
             "user": UserSerializer(user).data,
             "refresh": str(refresh),
@@ -102,16 +96,13 @@ class LoginView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # Find user by email
             user = User.objects.get(email=email)
             logger.info(f"🔍 User found: {user.username}")
             
-            # Authenticate with username and password
             authenticated_user = authenticate(username=user.username, password=password)
             logger.info(f"🔍 Authentication result: {authenticated_user}")
             
             if authenticated_user and authenticated_user.is_active:
-                # Create JWT tokens
                 refresh = RefreshToken.for_user(authenticated_user)
                 access_token = refresh.access_token
                 
@@ -171,7 +162,6 @@ class ChangePasswordView(APIView):
         user.save()
         return Response({"success": "Password updated successfully"}, status=status.HTTP_200_OK)
 
-# Doctor related views (unchanged)
 class SpecialtyViewSet(viewsets.ModelViewSet):
     queryset = Specialty.objects.all()
     serializer_class = SpecialtySerializer
@@ -217,7 +207,6 @@ class DoctorsBySpecialtyView(generics.ListAPIView):
         specialty_id = self.kwargs['specialty_id']
         return Doctor.objects.filter(specialties__id=specialty_id)
 
-# 🔧 ENHANCED: Schedule views with timezone validation
 class DoctorScheduleViewSet(viewsets.ModelViewSet):
     queryset = DoctorSchedule.objects.all()
     serializer_class = DoctorScheduleSerializer
@@ -230,17 +219,13 @@ class DoctorScheduleViewSet(viewsets.ModelViewSet):
         return [permission() for permission in permission_classes]
     
     def perform_create(self, serializer):
-        """Enhanced schedule creation with timezone validation"""
         try:
-            # Get data from serializer
             schedule_date = serializer.validated_data.get('date')
             start_time = serializer.validated_data.get('start_time')
             
-            # Validate with IST timezone
             validation_result = validate_not_in_past(schedule_date, start_time, buffer_minutes=30)
             
             if not validation_result['valid']:
-                # Log security attempt
                 log_security_attempt(
                     user=self.request.user,
                     action='PAST_SCHEDULE_CREATION_ATTEMPT',
@@ -260,7 +245,6 @@ class DoctorScheduleViewSet(viewsets.ModelViewSet):
             from rest_framework import serializers as drf_serializers
             raise drf_serializers.ValidationError(e.message_dict)
 
-# 🔧 ENHANCED: Available slots with IST timezone filtering
 class AvailableSlotsView(APIView):
     permission_classes = [AllowAny]
     
@@ -270,34 +254,28 @@ class AvailableSlotsView(APIView):
         except Doctor.DoesNotExist:
             return Response({'error': 'Doctor not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        # Get current IST time for filtering
         now_ist = get_current_ist_time()
         today = now_ist.date()
         current_time = now_ist.time()
         
-        # Get schedules from today onwards
         end_date = today + timedelta(days=30)
         
-        # Filter out past schedules using IST timezone
         available_slots = DoctorSchedule.objects.filter(
             doctor=doctor,
-            date__gte=today,  # Only today and future dates
+            date__gte=today,
             date__lte=end_date,
             is_active=True,
             available_slots__gt=0
         ).order_by('date', 'start_time')
         
-        # For today's schedules, also filter by time (IST)
         filtered_slots = []
         
         for schedule in available_slots:
             if schedule.date == today:
-                # For today, only include schedules that start in the future (with buffer)
                 buffer_time = (now_ist + timedelta(minutes=30)).time()
                 if schedule.start_time > buffer_time:
                     filtered_slots.append(schedule)
             else:
-                # For future dates, include all schedules
                 filtered_slots.append(schedule)
         
         serializer = DoctorScheduleSerializer(filtered_slots, many=True)
@@ -314,7 +292,6 @@ class AvailableTimeSlotsView(APIView):
                 is_active=True
             )
             
-            # 🔧 ENHANCED: Validate schedule is not in past (IST)
             validation_result = validate_not_in_past(schedule.date, schedule.start_time)
             
             if not validation_result['valid']:
@@ -334,7 +311,6 @@ class AvailableTimeSlotsView(APIView):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-# Patient views (unchanged)
 class PatientViewSet(viewsets.ModelViewSet):
     serializer_class = PatientSerializer
     permission_classes = [IsAuthenticated]
@@ -356,7 +332,6 @@ class MedicalHistoryViewSet(viewsets.ModelViewSet):
         patient = get_object_or_404(Patient, user=self.request.user)
         serializer.save(patient=patient)
 
-# 🔧 ENHANCED: Appointment views with comprehensive security
 class AppointmentViewSet(viewsets.ModelViewSet):
     serializer_class = AppointmentSerializer
     permission_classes = [IsAuthenticated]
@@ -381,20 +356,15 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         )
         serializer.save(patient=patient)
 
-# 🔧 COMPLETELY REWRITTEN: Enhanced booking with comprehensive validation
 class BookAppointmentView(APIView):
     permission_classes = [IsAuthenticated]
     
     def post(self, request, doctor_id):
-        # Get client IP for security logging
         client_ip = get_client_ip(request)
-        
-        # Log the booking attempt
         logger.info(f"📅 Appointment booking attempt by {request.user.username} for doctor {doctor_id}")
         
         serializer = BookAppointmentSerializer(data=request.data)
         if not serializer.is_valid():
-            # Log validation failure
             log_security_attempt(
                 user=request.user,
                 action='INVALID_BOOKING_DATA',
@@ -406,7 +376,6 @@ class BookAppointmentView(APIView):
         data = serializer.validated_data
         schedule_id = data['schedule_id']
         
-        # Get the schedule
         try:
             schedule = DoctorSchedule.objects.get(id=schedule_id, doctor_id=doctor_id)
         except DoctorSchedule.DoesNotExist:
@@ -415,7 +384,6 @@ class BookAppointmentView(APIView):
                 'error_code': 'SCHEDULE_NOT_FOUND'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Prepare appointment data for validation
         if schedule.time_range == 'slot-based':
             time_slot_id = data.get('time_slot_id')
             try:
@@ -442,7 +410,6 @@ class BookAppointmentView(APIView):
             appointment_end_time = data.get('end_time')
             time_slot = None
         
-        # 🔧 ENHANCED: Comprehensive validation with IST timezone
         validation_result = validate_appointment_booking(
             doctor_id=doctor_id,
             schedule_id=schedule_id,
@@ -453,7 +420,6 @@ class BookAppointmentView(APIView):
         )
         
         if not validation_result['valid']:
-            # Log security attempt if trying to book past appointments
             if validation_result.get('error_code') in ['PAST_TIME', 'DATE_MISMATCH']:
                 log_security_attempt(
                     user=request.user,
@@ -468,7 +434,6 @@ class BookAppointmentView(APIView):
                 'current_ist': validation_result['current_ist'].strftime('%Y-%m-%d %H:%M:%S IST')
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Get or create patient for this user
         patient, created = Patient.objects.get_or_create(
             user=request.user,
             defaults={
@@ -480,9 +445,7 @@ class BookAppointmentView(APIView):
             }
         )
         
-        # Create appointment within transaction
         try:
-            # Mark time slot as booked if slot-based
             if time_slot:
                 time_slot.is_booked = True
                 time_slot.save()
@@ -497,11 +460,9 @@ class BookAppointmentView(APIView):
                 notes=data.get('notes', '')
             )
             
-            # Reduce available slots
             schedule.available_slots -= 1
             schedule.save()
             
-            # Log successful booking
             logger.info(f"✅ Appointment booked successfully: {appointment.id} by {request.user.username}")
             
             return Response({
@@ -511,7 +472,6 @@ class BookAppointmentView(APIView):
             }, status=status.HTTP_201_CREATED)
             
         except ValidationError as e:
-            # If appointment creation fails, restore the time slot
             if time_slot:
                 time_slot.is_booked = False
                 time_slot.save()
@@ -522,7 +482,6 @@ class BookAppointmentView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         except Exception as e:
-            # If any error occurs, restore the time slot
             if time_slot:
                 time_slot.is_booked = False
                 time_slot.save()
@@ -533,7 +492,6 @@ class BookAppointmentView(APIView):
                 'error_code': 'CREATION_ERROR'
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# 🔧 ENHANCED: Cancel appointment with validation
 class CancelAppointmentView(APIView):
     permission_classes = [IsAuthenticated]
     
@@ -549,45 +507,38 @@ class CancelAppointmentView(APIView):
                 'error_code': 'APPOINTMENT_NOT_FOUND'
             }, status=status.HTTP_404_NOT_FOUND)
         
-        # Check if appointment can be canceled
         if appointment.status != 'scheduled':
             return Response({
                 'error': 'This appointment cannot be canceled',
                 'error_code': 'CANNOT_CANCEL'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # 🔧 ENHANCED: Check if cancellation is not too late (e.g., at least 2 hours before)
         now_ist = get_current_ist_time()
         appointment_datetime = datetime.combine(
             appointment.schedule.date, 
             appointment.appointment_start_time
         )
         
-        # If appointment is today, check time difference
         if appointment.schedule.date == now_ist.date():
             time_until_appointment = (appointment_datetime.time().hour * 60 + appointment_datetime.time().minute) - (now_ist.hour * 60 + now_ist.minute)
             
-            if time_until_appointment < 120:  # Less than 2 hours
+            if time_until_appointment < 120:
                 return Response({
                     'error': 'Cannot cancel appointment less than 2 hours before the scheduled time',
                     'error_code': 'TOO_LATE_TO_CANCEL'
                 }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Update status
         appointment.status = 'canceled'
         appointment.save()
         
-        # Mark time slot as available if it was slot-based
         if appointment.time_slot:
             appointment.time_slot.is_booked = False
             appointment.time_slot.save()
         
-        # Increase available slots
         schedule = appointment.schedule
         schedule.available_slots += 1
         schedule.save()
         
-        # Log cancellation
         logger.info(f"❌ Appointment {appointment_id} canceled by {request.user.username}")
         
         return Response({
@@ -596,7 +547,6 @@ class CancelAppointmentView(APIView):
         }, status=status.HTTP_200_OK)
     
 class SendOTPView(APIView):
-    """Send OTP for mobile login"""
     permission_classes = [AllowAny]
     
     def post(self, request):
@@ -607,15 +557,12 @@ class SendOTPView(APIView):
                 'error': 'Mobile number is required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Validate mobile number format (10 digits)
         if not re.match(r'^\d{10}$', mobile_number):
             return Response({
                 'error': 'Please enter a valid 10-digit mobile number'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Check if user exists with this mobile number
         try:
-            # Look for patient with this mobile number
             patient = Patient.objects.select_related('user').get(
                 phone_number=mobile_number
             )
@@ -627,12 +574,10 @@ class SendOTPView(APIView):
             
             logger.info(f"📱 OTP requested for mobile: {mobile_number}")
             
-            # For demo purposes, always return success
-            # In production, you would integrate with SMS service
             return Response({
                 'message': 'OTP sent successfully',
                 'mobile_number': mobile_number,
-                'demo_otp': '111'  # For demo purposes only
+                'demo_otp': '111'
             }, status=status.HTTP_200_OK)
             
         except Patient.DoesNotExist:
@@ -641,7 +586,6 @@ class SendOTPView(APIView):
             }, status=status.HTTP_404_NOT_FOUND)
 
 class VerifyOTPLoginView(APIView):
-    """Verify OTP and login user"""
     permission_classes = [AllowAny]
     
     def post(self, request):
@@ -653,14 +597,12 @@ class VerifyOTPLoginView(APIView):
                 'error': 'Mobile number and OTP are required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        # Validate OTP (hardcoded as 111 for demo)
         if otp != '111':
             return Response({
                 'error': 'Invalid OTP. Please try again.'
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            # Find patient with this mobile number
             patient = Patient.objects.select_related('user').get(
                 phone_number=mobile_number
             )
@@ -672,7 +614,6 @@ class VerifyOTPLoginView(APIView):
                     'error': 'Account is not active'
                 }, status=status.HTTP_401_UNAUTHORIZED)
             
-            # Create JWT tokens
             refresh = RefreshToken.for_user(user)
             access_token = refresh.access_token
             
