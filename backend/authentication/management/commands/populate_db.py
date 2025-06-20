@@ -8,6 +8,7 @@ from authentication.models import (
     Specialty, Language, Doctor, DoctorSchedule, 
     Patient, MedicalHistory, Appointment
 )
+from django.core.management import call_command
 
 class Command(BaseCommand):
     help = 'Populate database with sample data including both slot-based and range-based schedules'
@@ -43,6 +44,10 @@ class Command(BaseCommand):
         if options['clear_only']:
             self.stdout.write(self.style.SUCCESS('Data cleared successfully!'))
             return
+        
+        # Create setup groups and Hospital Admin
+        self.create_setup_groups()
+        self.create_hospital_admin()
         
         # Create sample data
         self.create_specialties()
@@ -693,3 +698,27 @@ class Command(BaseCommand):
                 continue
         
         self.stdout.write(f'Created {created_count} new sample patients')
+
+    def create_hospital_admin(self):
+        hospital_admin_data = {
+            "username" : "HospitalAdmin",
+            "password" : "Hospital123",
+            "email" : "hospitalAdmin@admin.com",
+            "first_name" : "Hospital",
+            "last_name" : "Admin"
+        }
+
+        user = User.objects.create_user(
+            username=hospital_admin_data['username'],
+            email=hospital_admin_data['email'],
+            first_name=hospital_admin_data['first_name'],
+            last_name=hospital_admin_data['last_name'],
+            password=hospital_admin_data['password'],
+            is_staff = True,
+        )
+
+        target_group = Group.objects.get(name='Hospital Admin')
+        user.groups.add(target_group)
+
+    def create_setup_groups(self):
+        call_command("setup_groups")
