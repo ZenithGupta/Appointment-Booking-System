@@ -3,7 +3,7 @@
 import random
 from datetime import datetime, timedelta, time
 from django.core.management.base import BaseCommand
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, Group
 from authentication.models import (
     Specialty, Language, Doctor, DoctorSchedule, 
     Patient, MedicalHistory, Appointment
@@ -468,8 +468,24 @@ class Command(BaseCommand):
             try:
                 # Create doctor
                 specialty = Specialty.objects.get(name=doctor_data['specialty'])
+
+                username = f"dr.{doctor_data['first_name'].lower()}"
+                password = "password123"  # A default, insecure password for development
+
+                user = User.objects.create_user(
+                    username=username,
+                    # email=doctor_data['email'],
+                    first_name=doctor_data['first_name'],
+                    last_name=doctor_data['last_name'],
+                    password=password,
+                    is_staff = True,
+                )
+
+                target_group = Group.objects.get(name='Doctor')
+                user.groups.add(target_group)
                 
                 doctor = Doctor.objects.create(
+                    user = user,
                     first_name=doctor_data['first_name'],
                     last_name=doctor_data['last_name'],
                     degree=doctor_data['degree'],
