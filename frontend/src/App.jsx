@@ -572,7 +572,9 @@ const DoctorCard = React.memo(({
   onCancel,
   getTimeSlotsForDate,
   checkExistingAppointment,
-  isSlotBookedByUser
+  isSlotBookedByUser,
+  onLogin,
+  onRegister
 }) => {
   return (
     <div className="doctor-card-wrapper">
@@ -811,35 +813,52 @@ const DoctorCard = React.memo(({
                 })()}
                 
                 <div className="d-flex gap-2">
-                  <button 
-                    className="btn btn-lime flex-fill fw-medium"
-                    onClick={onConfirmAppointment}
-                    disabled={!selectedTimeSlot || isLoading}
-                  >
-                    {isLoading ? (
-                      <>
-                        <span className="spinner-border spinner-border-sm me-2" role="status"></span>
-                        Booking...
-                      </>
-                    ) : !isLoggedIn ? (
-                      'Login to Confirm Appointment'
-                    ) : selectedTimeSlot?.schedule_type === 'range-based' ? (
-                      'Book Flexible Appointment'
-                    ) : (
-                      'Confirm Appointment'
-                    )}
-                  </button>
+                  {!isLoggedIn && selectedTimeSlot ? (
+                    <>
+                      <button
+                        className="btn btn-teal flex-fill fw-medium"
+                        onClick={onLogin}
+                        disabled={isLoading}
+                      >
+                        Login to Book
+                      </button>
+                      <button
+                        className="btn btn-outline-teal flex-fill fw-medium"
+                        onClick={onRegister}
+                        disabled={isLoading}
+                      >
+                        Register to Book
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      className="btn btn-lime flex-fill fw-medium"
+                      onClick={onConfirmAppointment}
+                      disabled={!selectedTimeSlot || isLoading}
+                    >
+                      {isLoading ? (
+                        <>
+                          <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                          Booking...
+                        </>
+                      ) : selectedTimeSlot?.schedule_type === 'range-based' ? (
+                        'Book Flexible Appointment'
+                      ) : (
+                        'Confirm Appointment'
+                      )}
+                    </button>
+                  )}
                   <button
                     onClick={onCancel}
-                    className="btn btn-outline-teal"
+                    className="btn btn-outline-secondary"
                   >
                     Cancel
                   </button>
                 </div>
-                
-                {!isLoggedIn && (
+
+                {!isLoggedIn && selectedTimeSlot && (
                   <p className="small text-muted text-center mt-2 mb-0">
-                    Please login to confirm your appointment booking
+                    Please login or register to confirm your appointment booking.
                   </p>
                 )}
                 
@@ -1954,6 +1973,8 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
                         getTimeSlotsForDate={getTimeSlotsForDate}
                         checkExistingAppointment={checkExistingAppointment}
                         isSlotBookedByUser={isSlotBookedByUser}
+                        onLogin={handleLogin}
+                        onRegister={handleRegister}
                       />
                     ))}
                   </div>
@@ -1987,7 +2008,7 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
                   <p className="mb-4" style={{ color: '#6c757d' }}>
                     {selectedSpecialty === 'all' 
                       ? 'We are working to add more doctors to our platform.' 
-                      : `We currently don't have any ${selectedSpecialty.toLowerCase()}s available. Try browsing other specialties.`
+                      : `We currently don't have any ${selectedSpecialty.toLowerCase()}s available. Try Browse other specialties.`
                     }
                   </p>
                   <div className="d-flex flex-column flex-sm-row gap-2 justify-content-center">
@@ -2066,12 +2087,9 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
             <div className="modal-content">
               <div className="modal-header">
                 <h5 className="modal-title">
-                  {authStep === 'mobile' 
-                    ? 'Create New Account'
-                    : authStep === 'otp'
-                    ? 'Verify Mobile Number'
-                    : authStep === 'profile'
-                    ? 'Complete Your Profile'
+                  {authMode === 'register' ? 
+                    (authStep === 'mobile' ? 'Create New Account' : 
+                     authStep === 'otp' ? 'Verify Mobile Number' : 'Complete Your Profile')
                     : 'Login to Your Account'
                   }
                 </h5>
@@ -2083,7 +2101,7 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
               </div>
 
 <div className="modal-body">
-  {authStep === 'login-form' ? (
+  {authMode === 'login' ? (
     <>
       {/* Login Method Toggle */}
       <div className="mb-4">
@@ -2276,7 +2294,7 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
       )}
     </>
   ) : authStep === 'mobile' ? (
-    // Registration mobile step (unchanged)
+    // Registration mobile step
     <form onSubmit={handleMobileSubmit}>
       {formErrors.general && (
         <div className="alert alert-danger" role="alert">
@@ -2315,7 +2333,7 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
       </div>
     </form>
   ) : authStep === 'otp' ? (
-    // Registration OTP step (unchanged)
+    // Registration OTP step
     <form onSubmit={handleOtpSubmit}>
       <div className="text-center mb-4">
         <div className="alert alert-info">
@@ -2356,7 +2374,7 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
       </div>
     </form>
   ) : (
-    // Registration profile step (unchanged)
+    // Registration profile step
     <form onSubmit={handleProfileSubmit}>
       {formErrors.general && (
         <div className="alert alert-danger" role="alert">
@@ -2446,8 +2464,23 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
               <div className="modal-footer">
                 <div className="text-center w-100">
                   
+                  {authMode === 'login' && (
+                    <small className="text-muted">
+                      New User? 
+                      <button 
+                        className="btn btn-link p-0 text-decoration-none ms-1"
+                        onClick={() => {
+                          setAuthMode('register');
+                          setAuthStep('mobile');
+                          setFormErrors({});
+                        }}
+                      >
+                        Register here
+                      </button>
+                    </small>
+                  )}
                   
-                  {authStep === 'mobile' && (
+                  {authMode === 'register' && authStep === 'mobile' && (
                     <small className="text-muted">
                       Already have an account? 
                       <button 
@@ -2471,7 +2504,7 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
                     </small>
                   )}
                   
-                  {authStep === 'otp' && (
+                  {authMode === 'register' && authStep === 'otp' && (
                     <small className="text-muted">
                       Didn't receive OTP? 
                       <button 
