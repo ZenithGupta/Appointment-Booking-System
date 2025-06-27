@@ -5,7 +5,6 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 block_cipher = None
 
-# This is the Analysis block where we define what to bundle.
 a = Analysis(
     ['launcher.py'],
     pathex=[SPECPATH],
@@ -14,15 +13,15 @@ a = Analysis(
         ('backend', 'backend'),
         ('frontend', 'frontend'),
         ('node-runtime', 'node-runtime'),
-        # This is the key fix: We are forcing PyInstaller to copy the
-        # entire directory structure of these packages, including the .py
-        # migration files that Django needs to find.
+        # --- Data Collection Section ---
         *collect_data_files('django', include_py_files=True),
         *collect_data_files('rest_framework', include_py_files=True),
         *collect_data_files('rest_framework_simplejwt', include_py_files=True),
         *collect_data_files('corsheaders', include_py_files=True),
         *collect_data_files('apscheduler', include_py_files=True),
         *collect_data_files('tzdata'),
+        # --- FIX: Aggressively collect all files from the jwt package ---
+        *collect_data_files('jwt', include_py_files=True),
     ],
     hiddenimports=[
         'rest_framework',
@@ -40,6 +39,9 @@ a = Analysis(
         'django.contrib.sessions',
         'django.contrib.messages',
         'django.contrib.staticfiles',
+        # --- FIX: Aggressively collect all submodules from the jwt package ---
+        'jwt',
+        *collect_submodules('jwt'),
     ],
     hookspath=[],
     runtime_hooks=[],
@@ -51,7 +53,6 @@ a = Analysis(
 )
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
-# This block defines the final executable.
 exe = EXE(
     pyz,
     a.scripts,
@@ -70,7 +71,6 @@ exe = EXE(
     entitlements_file=None,
 )
 
-# This block creates the final output folder.
 coll = COLLECT(
     exe,
     a.binaries,

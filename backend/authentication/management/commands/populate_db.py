@@ -29,6 +29,7 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS('Starting database population...'))
         
         # Show current database status
+        # This now works correctly as `User` refers to the model imported at the top of the file.
         self.stdout.write('Current database status:')
         self.stdout.write(f'  - Doctors: {Doctor.objects.count()}')
         self.stdout.write(f'  - Schedules: {DoctorSchedule.objects.count()}')
@@ -53,8 +54,21 @@ class Command(BaseCommand):
         self.create_specialties()
         self.create_languages()
         self.create_doctors()
-        self.create_mixed_schedules()  # NEW: Mixed schedule types
+        self.create_mixed_schedules()
         self.create_sample_patients()
+
+        # --- CORRECTED SUPERUSER CREATION SECTION ---
+        # The redundant `get_user_model` call that caused the error has been removed.
+        # We now use the `User` model that was already imported at the top of the file.
+        self.stdout.write(self.style.SUCCESS('\n--- Creating Default Superuser ---'))
+
+        if not User.objects.filter(username='Admin').exists():
+            self.stdout.write(self.style.NOTICE("Superuser 'Admin' not found. Creating..."))
+            User.objects.create_superuser('Admin', '', '123456')
+            self.stdout.write(self.style.SUCCESS("✅ Superuser 'Admin' created successfully."))
+        else:
+            self.stdout.write(self.style.WARNING("Superuser 'Admin' already exists. Skipping."))
+        # --- End of corrected section ---
         
         # Final summary
         self.stdout.write(self.style.SUCCESS('\n=== FINAL DATABASE SUMMARY ==='))
@@ -708,6 +722,11 @@ class Command(BaseCommand):
             "last_name" : "Admin"
         }
 
+        # Check if user already exists before creating
+        if User.objects.filter(username=hospital_admin_data['username']).exists():
+            self.stdout.write(f"User {hospital_admin_data['username']} already exists. Skipping.")
+            return
+
         user = User.objects.create_user(
             username=hospital_admin_data['username'],
             email=hospital_admin_data['email'],
@@ -719,6 +738,8 @@ class Command(BaseCommand):
 
         target_group = Group.objects.get(name='Hospital Admin')
         user.groups.add(target_group)
+        self.stdout.write(f"User {hospital_admin_data['username']} created and added to 'Hospital Admin' group.")
+
 
     def create_setup_groups(self):
         call_command("setup_groups")
