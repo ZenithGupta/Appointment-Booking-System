@@ -1,0 +1,26 @@
+# Git
+.git
+.gitignore
+
+# Docker
+Dockerfile
+.dockerignore
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+
+# Database
+db.sqlite3
+db.sqlite3-journal
+
+# Local settings
+local_settings.py
