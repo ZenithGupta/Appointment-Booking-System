@@ -4,22 +4,27 @@ services:
   backend:
     build: ./backend
     container_name: appointment_backend
-    command: gunicorn backend.wsgi:application --bind 0.0.0.0:8000
+    command: >
+      sh -c "python manage.py migrate && 
+             python manage.py collectstatic --noinput && 
+             python manage.py populate_db --no-clear && 
+             gunicorn backend.wsgi:application --bind 0.0.0.0:8000"
     expose:
       - 8000
     volumes:
       - ./backend:/app
-      - static_volume:/app/static # Persist static files
-      - media_volume:/app/media   # Persist media files (like profile pictures)
+      # This line is updated to point to 'staticfiles'
+      - static_volume:/app/staticfiles
+      - media_volume:/app/media
     environment:
       - SECRET_KEY=your-super-secret-key-for-docker
-      - DEBUG=0 # Set to 0 for production
+      - DEBUG=0
 
   frontend:
     build: ./frontend
     container_name: appointment_frontend
     ports:
-      - "80:80" # Map host port 80 to container port 80
+      - "80:80"
     depends_on:
       - backend
 
