@@ -13,17 +13,20 @@ django-cors-headers==4.7.0
 Pillow==11.2.1
 
 # 🔧 NEW: Timezone Support
-pytz==2025.2  # For handling IST timezone properly
+pytz==2025.2
+
+# 🔧 NEW: Library to make HTTP requests to Meta API
+requests==2.31.0
 
 # Database Support
 # For PostgreSQL (uncomment if needed):
 # psycopg2-binary==2.9.9
 
 # Development Tools
-# django-debug-toolbar==4.2.0  # Uncomment for development debugging
+# django-debug-toolbar==4.2.0
 
 # Environment Variables
-# python-decouple==3.8  # Uncomment if using .env files
+# python-decouple==3.8
 
 # Core Python Dependencies
 asgiref==3.8.1
@@ -35,7 +38,7 @@ setuptools==78.1.1
 wheel==0.45.1
 
 # For Automatic Database cleanup - Enhanced
-APScheduler==3.10.4  # Cross-platform Scheduler for automatic cleanup with timezone support
+APScheduler==3.10.4
 
 # 🔧 NEW: Additional utilities for enhanced validation
-python-dateutil==2.9.0  # Better date/time parsing and manipulation
+python-dateutil==2.9.0

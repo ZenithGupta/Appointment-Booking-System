@@ -28,9 +28,11 @@ urlpatterns = [
     path('profile/', views.UserProfileView.as_view(), name='profile'),
     path('change-password/', views.ChangePasswordView.as_view(), name='change-password'),
     
-    # NEW: Mobile login endpoints
-    path('send-otp/', views.SendOTPView.as_view(), name='send-otp'),
-    path('verify-otp-login/', views.VerifyOTPLoginView.as_view(), name='verify-otp-login'),
+    # -------------------------------------------------------------------
+    # MODIFIED: WhatsApp OTP login endpoints with new view names
+    path('send-otp/', views.SendWhatsAppOTPView.as_view(), name='send-otp'),
+    path('verify-otp-login/', views.VerifyWhatsAppOTPView.as_view(), name='verify-otp-login'),
+    # -------------------------------------------------------------------
     
     # Doctor specific URLs
     path('doctors/by-specialty/<int:specialty_id>/', views.DoctorsBySpecialtyView.as_view(), name='doctors-by-specialty'),

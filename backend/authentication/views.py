@@ -12,6 +12,9 @@ from django.core.exceptions import ValidationError
 from datetime import datetime, timedelta
 from django.db import transaction
 import re
+import random
+from django.conf import settings
+import requests # 🔧 NEW: Import requests library
 
 from .models import (
     Doctor, DoctorSchedule, Specialty, Language, TimeSlot,
@@ -47,7 +50,6 @@ class RegisterView(generics.CreateAPIView):
         
         mobile_number = request.data.get('mobile_number', '').strip()
         
-        # MODIFIED: Add validation for mobile number uniqueness
         if mobile_number and Patient.objects.filter(phone_number=mobile_number).exists():
             return Response({
                 "error": "A user with this mobile number already exists."
@@ -141,6 +143,7 @@ class LogoutView(APIView):
         except Exception as e:
             return Response({"error": "Invalid token"}, status=status.HTTP_400_BAD_REQUEST)
 
+# ... (All other non-OTP views like UserProfileView, DoctorViewSet, etc. remain the same) ...
 class UserProfileView(generics.RetrieveUpdateAPIView):
     permission_classes = [IsAuthenticated]
     serializer_class = UserSerializer
@@ -190,6 +193,8 @@ class DoctorViewSet(viewsets.ModelViewSet):
     filterset_fields = ['specialties', 'languages']
     search_fields = ['first_name', 'last_name', 'bio']
     pagination_class = CustomPagination
+    ordering_fields = ['first_name', 'years_of_experience']
+    ordering = ['first_name']
     
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -545,17 +550,19 @@ class CancelAppointmentView(APIView):
             'message': 'Appointment canceled successfully',
             'canceled_at_ist': now_ist.strftime('%Y-%m-%d %H:%M:%S IST')
         }, status=status.HTTP_200_OK)
-    
-class SendOTPView(APIView):
+
+# -------------------------------------------------------------------
+# REPLACED: The old SendOTPView and VerifyOTPLoginView are replaced with these new versions.
+# -------------------------------------------------------------------
+
+class SendWhatsAppOTPView(APIView):
+    """
+    Handles sending a WhatsApp OTP to a registered user's mobile number.
+    """
     permission_classes = [AllowAny]
     
     def post(self, request):
         mobile_number = request.data.get('mobile_number', '').strip()
-        
-        if not mobile_number:
-            return Response({
-                'error': 'Mobile number is required'
-            }, status=status.HTTP_400_BAD_REQUEST)
         
         if not re.match(r'^\d{10}$', mobile_number):
             return Response({
@@ -563,75 +570,155 @@ class SendOTPView(APIView):
             }, status=status.HTTP_400_BAD_REQUEST)
         
         try:
-            patient = Patient.objects.select_related('user').get(
-                phone_number=mobile_number
-            )
-            
+            patient = Patient.objects.get(phone_number=mobile_number)
             if not patient.user or not patient.user.is_active:
                 return Response({
-                    'error': 'No active account found with this mobile number'
+                    'error': 'No active account found with this mobile number.'
                 }, status=status.HTTP_404_NOT_FOUND)
-            
-            logger.info(f"📱 OTP requested for mobile: {mobile_number}")
-            
-            return Response({
-                'message': 'OTP sent successfully',
-                'mobile_number': mobile_number,
-                'demo_otp': '111'
-            }, status=status.HTTP_200_OK)
-            
         except Patient.DoesNotExist:
             return Response({
                 'error': 'No account found with this mobile number. Please register first.'
             }, status=status.HTTP_404_NOT_FOUND)
 
-class VerifyOTPLoginView(APIView):
+        # Generate a 6-digit OTP
+        otp = random.randint(100000, 999999)
+        otp_expiry = timezone.now() + timedelta(minutes=10)
+
+        # Store OTP and its expiry in the user's session
+        request.session['whatsapp_otp'] = otp
+        request.session['whatsapp_otp_expiry'] = otp_expiry.isoformat()
+        request.session['whatsapp_mobile_number'] = mobile_number
+
+        logger.info(f"📱 Generated OTP {otp} for mobile: {mobile_number}")
+
+        # Construct Meta API request
+        api_url = f"https://graph.facebook.com/{settings.META_API_VERSION}/{settings.META_WHATSAPP_PHONE_NUMBER_ID}/messages"
+        
+        headers = {
+            'Authorization': f'Bearer {settings.META_WHATSAPP_ACCESS_TOKEN}',
+            'Content-Type': 'application/json',
+        }
+        
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": f"91{mobile_number}",
+            "type": "template",
+            "template": {
+                "name": "healthcare_otp", # Or "auth_code" if you created a new one
+                "language": { "code": "en_IN" },
+                "components": [
+                    # Component for the {{1}} in the message body
+                    {
+                        "type": "body",
+                        "parameters": [
+                            {
+                                "type": "text",
+                                "text": str(otp) 
+                            }
+                        ]
+                    },
+                    # REQUIRED component for the "Copy code" button, which the API treats as a URL button
+                    {
+                        "type": "button",
+                        "sub_type": "url",
+                        "index": "0",
+                        "parameters": [
+                            {
+                                "type": "text",
+                                # The API requires a value for the dynamic part of the URL.
+                                # For example, if the button URL in the template was "https://example.com/{{1}}",
+                                # this text value would replace {{1}}.
+                                # For our purpose, we can simply pass the OTP again.
+                                "text": str(otp)
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+
+        try:
+            response = requests.post(api_url, headers=headers, json=payload)
+            response.raise_for_status()  # Raise an exception for bad status codes (4xx or 5xx)
+
+            logger.info(f"✅ WhatsApp OTP sent to +91{mobile_number}. Response: {response.json()}")
+            return Response({
+                'message': 'OTP sent successfully to your WhatsApp number.'
+            }, status=status.HTTP_200_OK)
+
+        except requests.exceptions.RequestException as e:
+            logger.error(f"❌ Failed to send WhatsApp OTP via Meta API: {e}")
+            if e.response:
+                logger.error(f"❌ Response body: {e.response.text}")
+            
+            return Response({
+                'error': 'Failed to send OTP at this time. Please try again later.'
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class VerifyWhatsAppOTPView(APIView):
+    """
+    Verifies the OTP provided by the user and logs them in if correct.
+    """
     permission_classes = [AllowAny]
     
     def post(self, request):
         mobile_number = request.data.get('mobile_number', '').strip()
-        otp = request.data.get('otp', '').strip()
+        otp_received = request.data.get('otp', '').strip()
         
-        if not mobile_number or not otp:
+        if not mobile_number or not otp_received:
             return Response({
                 'error': 'Mobile number and OTP are required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
-        if otp != '111':
-            return Response({
-                'error': 'Invalid OTP. Please try again.'
-            }, status=status.HTTP_400_BAD_REQUEST)
-        
-        try:
-            patient = Patient.objects.select_related('user').get(
-                phone_number=mobile_number
-            )
-            
-            user = patient.user
-            
-            if not user or not user.is_active:
+        # Retrieve OTP details from session
+        stored_otp = request.session.get('whatsapp_otp')
+        stored_expiry_str = request.session.get('whatsapp_otp_expiry')
+        stored_mobile = request.session.get('whatsapp_mobile_number')
+
+        if not all([stored_otp, stored_expiry_str, stored_mobile]):
+            return Response({'error': 'No OTP has been sent. Please request an OTP first.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if str(mobile_number) != str(stored_mobile):
+            return Response({'error': 'Mobile number does not match the one OTP was sent to.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Check for OTP expiry
+        stored_expiry = datetime.fromisoformat(stored_expiry_str)
+        if timezone.now() > stored_expiry:
+            # Clear expired OTP from session
+            del request.session['whatsapp_otp']
+            return Response({'error': 'OTP has expired. Please request a new one.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if str(otp_received) == str(stored_otp):
+            # OTP is correct, log the user in
+            try:
+                patient = Patient.objects.get(phone_number=mobile_number)
+                user = patient.user
+                
+                # Clear the OTP from the session after successful verification
+                del request.session['whatsapp_otp']
+                del request.session['whatsapp_otp_expiry']
+                del request.session['whatsapp_mobile_number']
+
+                # Generate JWT tokens for the user
+                refresh = RefreshToken.for_user(user)
+                
+                logger.info(f"✅ WhatsApp OTP login successful for: {mobile_number}")
+
                 return Response({
-                    'error': 'Account is not active'
-                }, status=status.HTTP_401_UNAUTHORIZED)
-            
-            refresh = RefreshToken.for_user(user)
-            access_token = refresh.access_token
-            
-            logger.info(f"✅ Mobile login successful for: {mobile_number}")
-            
-            return Response({
-                'refresh': str(refresh),
-                'access': str(access_token),
-                'user_id': user.id,
-                'email': user.email,
-                'username': user.username,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-                'mobile_number': mobile_number,
-                'login_method': 'mobile'
-            }, status=status.HTTP_200_OK)
-            
-        except Patient.DoesNotExist:
-            return Response({
-                'error': 'No account found with this mobile number'
-            }, status=status.HTTP_404_NOT_FOUND)
+                    'message': 'Login successful!',
+                    'refresh': str(refresh),
+                    'access': str(refresh.access_token),
+                    'user_id': user.id,
+                    'email': user.email,
+                    'username': user.username,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                    'mobile_number': mobile_number,
+                    'login_method': 'mobile'
+                }, status=status.HTTP_200_OK)
+
+            except Patient.DoesNotExist:
+                return Response({'error': 'User not found.'}, status=status.HTTP_404_NOT_FOUND)
+        else:
+            logger.warning(f"❌ Invalid OTP attempt for mobile: {mobile_number}")
+            return Response({'error': 'Invalid OTP. Please try again.'}, status=status.HTTP_400_BAD_REQUEST)
