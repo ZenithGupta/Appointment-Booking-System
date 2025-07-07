@@ -214,3 +214,10 @@ LOGGING = {
         },
     },
 }
+
+# --- META WHATSAPP CLOUD API CONFIGURATION ---
+# Replace the placeholder values with the credentials you copied from the API Setup page.
+
+META_WHATSAPP_ACCESS_TOKEN = 'INSERT_ACTIVE_TOKEN_HERE'
+META_WHATSAPP_PHONE_NUMBER_ID = 'iNSERT_PHONE_NUMBER_ID_HERE' 
+META_API_VERSION = 'v22.0'                        # Use the version from the curl command

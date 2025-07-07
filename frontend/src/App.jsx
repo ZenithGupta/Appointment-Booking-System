@@ -932,6 +932,21 @@ const App = () => {
   const [userName, setUserName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   
+  // NEW: State for OTP resend cooldown
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [isResending, setIsResending] = useState(false);
+
+  // NEW: Effect for the resend cooldown timer
+  useEffect(() => {
+    if (resendCooldown > 0) {
+      const timer = setTimeout(() => {
+        setResendCooldown(resendCooldown - 1);
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [resendCooldown]);
+
+
   // Check authentication on component mount
   useEffect(() => {
     const checkAuth = () => {
@@ -1470,7 +1485,7 @@ const App = () => {
     return timeSlots;
   }, [availableSlots]);
 
-  // Auth form validation functions (keep existing)
+  // Auth form validation functions
   const validateMobile = () => {
     const errors = {};
     if (!userFormData.mobileNumber.trim()) {
@@ -1524,12 +1539,13 @@ const App = () => {
   return errors;
 };
 
+// MODIFIED: This validation is no longer needed as the button will be disabled
 const validateOTPLogin = () => {
   const errors = {};
   if (!userFormData.loginOTP.trim()) {
     errors.loginOTP = 'OTP is required';
-  } else if (userFormData.loginOTP !== '111') {
-    errors.loginOTP = 'Invalid OTP. Please enter 111';
+  } else if (userFormData.loginOTP.length < 6) { // Check for length instead of value
+    errors.loginOTP = 'Please enter a 6-digit OTP';
   }
   return errors;
 };
@@ -1600,11 +1616,12 @@ const validateOTPLogin = () => {
   const handleOtpSubmit = useCallback((e) => {
     e.preventDefault();
     
-    if (userFormData.otp === '111') {
+    // MODIFIED: Check for 6 digit demo OTP
+    if (userFormData.otp === '111111') {
       setAuthStep('profile');
       setFormErrors({});
     } else {
-      setFormErrors({ otp: 'Invalid OTP. Please enter 111' });
+      setFormErrors({ otp: 'Invalid OTP. Please enter 111111' });
     }
   }, [userFormData.otp]);
 
@@ -1683,6 +1700,7 @@ const validateOTPLogin = () => {
     if (result.success) {
       setMobileLoginStep('otp');
       setFormErrors({});
+      setResendCooldown(30); // NEW: Start cooldown timer
     } else {
       setFormErrors({ 
         loginMobile: result.error 
@@ -1700,11 +1718,7 @@ const validateOTPLogin = () => {
 const handleOTPLoginSubmit = useCallback(async (e) => {
   e.preventDefault();
   
-  const errors = validateOTPLogin();
-  if (Object.keys(errors).length > 0) {
-    setFormErrors(errors);
-    return;
-  }
+  // No need for client-side validation here anymore as button is disabled
   
   setIsLoading(true);
   setFormErrors({});
@@ -1745,12 +1759,32 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
   }
 }, [userFormData.loginMobile, userFormData.loginOTP]);
 
+// NEW: Handler for resending OTP
+const handleResendOTP = useCallback(async () => {
+  if (resendCooldown > 0) return;
+
+  setIsResending(true);
+  setFormErrors({});
+
+  const result = await authAPI.sendOTP(userFormData.loginMobile);
+  if (result.success) {
+    alert('A new OTP has been sent to your number.');
+    setResendCooldown(30); // Restart cooldown
+  } else {
+    setFormErrors({ loginOTP: 'Failed to resend OTP. Please try again.' });
+  }
+  
+  setIsResending(false);
+}, [userFormData.loginMobile, resendCooldown]);
+
+
   const closeAuthModal = useCallback(() => {
   setShowAuthModal(false);
   setAuthStep('mobile');
   setLoginMethod('email');
   setMobileLoginStep('mobile');
   setFormErrors({});
+  setResendCooldown(0); // NEW: Reset cooldown on close
   setUserFormData({
     mobileNumber: '',
     otp: '',
@@ -2197,7 +2231,7 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
         </form>
       )}
 
-      {/* Mobile Login Form */}
+      {/* MODIFIED: Mobile Login Form with Resend OTP logic */}
       {loginMethod === 'mobile' && (
         <>
           {mobileLoginStep === 'mobile' ? (
@@ -2243,8 +2277,6 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
               <div className="text-center mb-4">
                 <div className="alert alert-info">
                   <strong>OTP sent to:</strong> {userFormData.loginMobile}
-                  <br />
-                  <small>For demo purposes, enter: <strong>111</strong></small>
                 </div>
               </div>
               
@@ -2256,8 +2288,8 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
                   id="loginOTP"
                   value={userFormData.loginOTP}
                   onChange={(e) => handleInputChange('loginOTP', e.target.value)}
-                  placeholder="Enter 3-digit OTP"
-                  maxLength="3"
+                  placeholder="Enter 6-digit OTP"
+                  maxLength="6"
                   style={{ fontSize: '1.5rem', letterSpacing: '0.5rem' }}
                 />
                 {formErrors.loginOTP && (
@@ -2266,7 +2298,11 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
               </div>
               
               <div className="d-grid gap-2">
-                <button type="submit" className="btn btn-lime" disabled={isLoading}>
+                <button 
+                  type="submit" 
+                  className="btn btn-lime" 
+                  disabled={isLoading || userFormData.loginOTP.length < 6}
+                >
                   {isLoading ? (
                     <>
                       <span className="spinner-border spinner-border-sm me-2" role="status"></span>
@@ -2285,8 +2321,26 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
                   }}
                   disabled={isLoading}
                 >
-                  Back to Mobile
+                  Change Number
                 </button>
+              </div>
+              <div className="text-center mt-3">
+                <small className="text-muted">
+                  Didn't receive the OTP? 
+                  <button
+                    type="button"
+                    className="btn btn-link btn-sm p-0 ms-1"
+                    onClick={handleResendOTP}
+                    disabled={resendCooldown > 0 || isResending}
+                  >
+                    {isResending 
+                      ? 'Sending...' 
+                      : resendCooldown > 0 
+                        ? `Resend in ${resendCooldown}s`
+                        : 'Resend OTP'
+                    }
+                  </button>
+                </small>
               </div>
             </form>
           )}
@@ -2333,13 +2387,13 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
       </div>
     </form>
   ) : authStep === 'otp' ? (
-    // Registration OTP step
+    // MODIFIED: Registration OTP step
     <form onSubmit={handleOtpSubmit}>
       <div className="text-center mb-4">
         <div className="alert alert-info">
           <strong>OTP sent to:</strong> {userFormData.mobileNumber}
           <br />
-          <small>For demo purposes, enter: <strong>111</strong></small>
+          <small>For demo purposes, enter: <strong>111111</strong></small>
         </div>
       </div>
       
@@ -2351,8 +2405,8 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
           id="otp"
           value={userFormData.otp}
           onChange={(e) => handleInputChange('otp', e.target.value)}
-          placeholder="Enter 3-digit OTP"
-          maxLength="3"
+          placeholder="Enter 6-digit OTP"
+          maxLength="6"
           style={{ fontSize: '1.5rem', letterSpacing: '0.5rem' }}
         />
         {formErrors.otp && (
@@ -2361,7 +2415,11 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
       </div>
       
       <div className="d-grid gap-2">
-        <button type="submit" className="btn btn-lime">
+        <button 
+            type="submit" 
+            className="btn btn-lime"
+            disabled={userFormData.otp.length < 6}
+        >
           Verify OTP
         </button>
         <button 
@@ -2369,7 +2427,7 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
           className="btn btn-outline-secondary"
           onClick={() => setAuthStep('mobile')}
         >
-          Back to Mobile
+          Change Number
         </button>
       </div>
     </form>
@@ -2504,13 +2562,14 @@ const handleOTPLoginSubmit = useCallback(async (e) => {
                     </small>
                   )}
                   
+                  {/* MODIFIED: Registration Resend Button */}
                   {authMode === 'register' && authStep === 'otp' && (
                     <small className="text-muted">
                       Didn't receive OTP? 
                       <button 
                         className="btn btn-link p-0 text-decoration-none ms-1"
                         onClick={() => {
-                          alert('OTP resent! (Demo: still use 111)');
+                          alert('OTP resent! (Demo: still use 111111)');
                         }}
                       >
                         Resend
